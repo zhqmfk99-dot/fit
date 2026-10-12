@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { ChevronDown, CalendarClock, Play } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import WorkoutFormModal from '../components/WorkoutFormModal.jsx'
+import BodyRecordModal from '../components/BodyRecordModal.jsx'
 import RescheduleModal from '../components/RescheduleModal.jsx'
 import { setCount, avgReps, avgWeight } from '../lib/workoutMetrics.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../hooks/useWorkoutLog.js'
@@ -38,6 +40,7 @@ export default function WorkoutLog() {
     toggleComplete,
     handleModalSave,
   } = useWorkoutLog()
+  const [showBodyModal, setShowBodyModal] = useState(false)
 
   const renderLogRow = log => (
     <div
@@ -294,17 +297,25 @@ export default function WorkoutLog() {
               )}
             </div>
 
-            <div className="p-3 border-t border-gray-100 shrink-0">
+            <div className="p-3 border-t border-gray-100 shrink-0 flex flex-col gap-2">
               <button
                 onClick={() => openCreate(listDate)}
                 className="w-full bg-letusBlue text-white text-sm font-bold py-2.5 rounded-lg hover:bg-blue-600 transition-colors"
               >
-                + 기록 추가
+                + 운동 기록 추가
+              </button>
+              <button
+                onClick={() => setShowBodyModal(true)}
+                className="w-full bg-emerald-600 text-white text-sm font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                + 신체 기록
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {showBodyModal && <BodyRecordModal initialDate={listDate} onClose={() => setShowBodyModal(false)} />}
 
       {showModal && (
         <WorkoutFormModal row={modalRow} initialDate={modalDate} onClose={() => setShowModal(false)} onSave={handleModalSave} />

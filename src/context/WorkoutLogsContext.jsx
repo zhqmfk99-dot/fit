@@ -40,6 +40,38 @@ const logToRow = l => ({
   is_completed: !!l.isCompleted,
 })
 
+const num = v => (v == null ? null : Number(v))
+const bodyRecordFromRow = r => ({
+  id: r.id,
+  date: r.date,
+  heightCm: num(r.height_cm),
+  weightKg: num(r.weight_kg),
+  bmi: num(r.bmi),
+  boneMassKg: num(r.bone_mass_kg),
+  bodyFatPct: num(r.body_fat_pct),
+  muscleMassKg: num(r.muscle_mass_kg),
+  musclePct: num(r.muscle_pct),
+  proteinPct: num(r.protein_pct),
+  waterPct: num(r.water_pct),
+  skeletalMuscleKg: num(r.skeletal_muscle_kg),
+  bmr: num(r.bmr),
+})
+const bodyRecordToRow = b => ({
+  id: b.id,
+  date: b.date,
+  height_cm: b.heightCm ?? null,
+  weight_kg: b.weightKg ?? null,
+  bmi: b.bmi ?? null,
+  bone_mass_kg: b.boneMassKg ?? null,
+  body_fat_pct: b.bodyFatPct ?? null,
+  muscle_mass_kg: b.muscleMassKg ?? null,
+  muscle_pct: b.musclePct ?? null,
+  protein_pct: b.proteinPct ?? null,
+  water_pct: b.waterPct ?? null,
+  skeletal_muscle_kg: b.skeletalMuscleKg ?? null,
+  bmr: b.bmr ?? null,
+})
+
 // 이전/다음 상태를 id로 비교해 바뀐 행만 upsert, 사라진 행은 delete 한다.
 async function persistDiff(table, prev, next, toRow) {
   const prevById = new Map(prev.map(x => [x.id, x]))
@@ -97,16 +129,20 @@ export function WorkoutLogsProvider({ children }) {
   const [logs, setLogs, replaceLogs] = usePersistedState('workout_logs', logToRow, queueRef, handleError)
   const [routines, setRoutines, replaceRoutines] = usePersistedState('routines', routineToRow, queueRef, handleError)
   const [exercises, setExercises, replaceExercises] = usePersistedState('exercises', exerciseToRow, queueRef, handleError)
+  const [bodyRecords, setBodyRecords, replaceBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleError)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [ex, ro, lo] = await Promise.all([
+      const [ex, ro, lo, bo] = await Promise.all([
         supabase.from('exercises').select('*').order('created_at', { ascending: false }),
         supabase.from('routines').select('*').order('created_at', { ascending: false }),
         supabase.from('workout_logs').select('*').order('date', { ascending: false }).order('created_at', { ascending: true }),
+        supabase.from('body_records').select('*').order('date', { ascending: false }),
       ])
       if (cancelled) return
+      // 신체 기록은 부가 기능이라 조회에 실패해도(테이블 미생성 등) 나머지 데이터는 정상 로드한다
+      if (bo.error) console.warn('body_records 조회 실패:', bo.error.message)
       const firstError = ex.error || ro.error || lo.error
       if (firstError) {
         setError(firstError.message)
@@ -118,6 +154,7 @@ export function WorkoutLogsProvider({ children }) {
       replaceExercises(ex.data.map(exerciseFromRow))
       replaceRoutines(loadedRoutines)
       replaceLogs(loadedLogs)
+      replaceBodyRecords((bo.data ?? []).map(bodyRecordFromRow))
       setLoading(false)
       // 앞으로 2주치 "예정" 기록을 채워 넣는다 (이미 있으면 건너뜀)
       const scheduled = generateScheduledLogs(loadedRoutines, loadedLogs)
@@ -126,14 +163,14 @@ export function WorkoutLogsProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [replaceExercises, replaceRoutines, replaceLogs, setLogs])
+  }, [replaceExercises, replaceRoutines, replaceLogs, replaceBodyRecords, setLogs])
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-sm font-bold text-gray-400">불러오는 중...</div>
   }
 
   return (
-    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises }}>
+    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords }}>
       {error && (
         <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
           <span>{error}</span>

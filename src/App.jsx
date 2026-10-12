@@ -8,6 +8,7 @@ import WorkoutDashboard from './pages/WorkoutDashboard.jsx'
 import WorkoutLog from './pages/WorkoutLog.jsx'
 import WorkoutRoutine from './pages/WorkoutRoutine.jsx'
 import WorkoutExercises from './pages/WorkoutExercises.jsx'
+import MobileDashboard from './pages/mobile/MobileDashboard.jsx'
 import MobileMenuScreen from './pages/mobile/MobileMenuScreen.jsx'
 import MobileLog from './pages/mobile/MobileLog.jsx'
 import MobileRoutines from './pages/mobile/MobileRoutines.jsx'
@@ -36,7 +37,7 @@ function MobileApp() {
     <div className="min-h-screen bg-letusBg">
       <Routes>
         <Route index element={<MobileMenuScreen />} />
-        <Route path="dashboard" element={<WorkoutDashboard />} />
+        <Route path="dashboard" element={<MobileDashboard />} />
         <Route path="log" element={<MobileLog />} />
         <Route path="routine" element={<MobileRoutines />} />
         <Route path="exercises" element={<MobileExercises />} />

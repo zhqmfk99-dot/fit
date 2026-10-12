@@ -4,6 +4,7 @@ import { CalendarCheck, TrendingUp, Flame } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import StatCard from '../components/StatCard.jsx'
 import MuscleFatigueMap from '../components/MuscleFatigueMap.jsx'
+import BodyTrendChart from '../components/BodyTrendChart.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { totalVolume } from '../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../lib/muscleMap.js'
@@ -19,7 +20,7 @@ function buildVolumeTrend(logs) {
 }
 
 export default function WorkoutDashboard() {
-  const { logs, exercises } = useWorkoutLogs()
+  const { logs, exercises, bodyRecords } = useWorkoutLogs()
   const [selectedMuscle, setSelectedMuscle] = useState(null)
 
   // 아직 완료 전인 "예정" 기록은 실제로 한 게 아니라서 통계에서 제외한다
@@ -43,26 +44,31 @@ export default function WorkoutDashboard() {
           <StatCard label="평균 피로도" value={avgFatigue} unit="/5" icon={Flame} color="text-orange-500" />
         </div>
 
-        <MuscleFatigueMap logs={logs} exercises={exercises} selectedMuscle={selectedMuscle} onSelectMuscle={setSelectedMuscle} />
+        <BodyTrendChart records={bodyRecords} />
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <h3 className="text-base font-bold text-slate-700 mb-3">
-            볼륨 추이
-            {selectedMuscle && <span className="text-letusBlue"> · {MUSCLE_LABELS[selectedMuscle] || selectedMuscle}</span>}
-          </h3>
-          {targetExercises && targetExercises.length === 0 ? (
-            <div className="h-[200px] flex items-center justify-center text-sm text-gray-400 font-bold">이 부위에 해당하는 운동 기록이 없습니다.</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="volume" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+        {/* 부위별 피로도 / 볼륨 추이 좌우 배치 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <MuscleFatigueMap logs={logs} exercises={exercises} selectedMuscle={selectedMuscle} onSelectMuscle={setSelectedMuscle} />
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <h3 className="text-base font-bold text-slate-700 mb-3">
+              볼륨 추이
+              {selectedMuscle && <span className="text-letusBlue"> · {MUSCLE_LABELS[selectedMuscle] || selectedMuscle}</span>}
+            </h3>
+            {targetExercises && targetExercises.length === 0 ? (
+              <div className="h-[200px] flex items-center justify-center text-sm text-gray-400 font-bold">이 부위에 해당하는 운동 기록이 없습니다.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="volume" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
       </div>
     </div>
