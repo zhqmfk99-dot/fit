@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../components/PageHeader.jsx'
-import ExerciseFormModal from '../components/ExerciseFormModal.jsx'
-import ExerciseDetailModal from '../components/ExerciseDetailModal.jsx'
+import ExerciseFormModal from '../components/web/ExerciseFormModal.jsx'
+import ExerciseDetailModal from '../components/web/ExerciseDetailModal.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { MUSCLE_LABELS, UPPER_BODY_MUSCLES, LOWER_BODY_MUSCLES, EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
 

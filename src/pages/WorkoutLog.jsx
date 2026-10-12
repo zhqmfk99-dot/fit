@@ -1,9 +1,9 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { ChevronDown, CalendarClock, Play } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
-import WorkoutFormModal from '../components/WorkoutFormModal.jsx'
+import WorkoutFormModal from '../components/web/WorkoutFormModal.jsx'
 import BodyRecordModal from '../components/BodyRecordModal.jsx'
-import RescheduleModal from '../components/RescheduleModal.jsx'
+import RescheduleModal from '../components/web/RescheduleModal.jsx'
 import { setCount, avgReps, avgWeight } from '../lib/workoutMetrics.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../hooks/useWorkoutLog.js'
 
@@ -50,16 +50,16 @@ export default function WorkoutLog() {
       }`}
     >
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className={`text-sm font-bold truncate ${log.isCompleted ? 'text-gray-800' : 'text-gray-500'}`}>{log.exercise}</span>
-        <span className="text-xs text-gray-400">
+        <span className={`text-ui-body font-bold truncate ${log.isCompleted ? 'text-gray-800' : 'text-gray-500'}`}>{log.exercise}</span>
+        <span className="text-ui-caption text-gray-400">
           {setCount(log)}세트 x {avgReps(log)}회 x {avgWeight(log)}kg
         </span>
       </div>
       <div className="flex items-center gap-1 shrink-0">
         {log.isCompleted ? (
-          <span className={`text-xs font-bold px-2 py-0.5 rounded ${fatigueBadgeColor(log.fatigue)}`}>{log.fatigue}</span>
+          <span className={`text-ui-caption font-bold px-2 py-0.5 rounded ${fatigueBadgeColor(log.fatigue)}`}>{log.fatigue}</span>
         ) : (
-          <span className="text-xs font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-400">예정</span>
+          <span className="text-ui-caption font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-400">예정</span>
         )}
         <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
           {!log.isCompleted && (
@@ -106,7 +106,7 @@ export default function WorkoutLog() {
       <div className="p-4 flex flex-col gap-4">
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 min-h-[56px] flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-black text-gray-800 tracking-tight">
+            <h2 className="text-ui-title font-black text-gray-800 tracking-tight">
               {year}년 {month + 1}월
             </h2>
             <div className="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-200">
@@ -115,7 +115,7 @@ export default function WorkoutLog() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <button onClick={goToday} className="px-3 py-1 text-sm font-bold text-gray-700 hover:bg-white rounded-md">
+              <button onClick={goToday} className="px-3 py-1 text-ui-body font-bold text-gray-700 hover:bg-white rounded-md">
                 오늘
               </button>
               <button onClick={nextMonth} className="p-1 hover:bg-white rounded-md text-gray-500">
@@ -158,7 +158,7 @@ export default function WorkoutLog() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px] flex-1 lg:w-[calc(100%-360px)]">
             <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80 shrink-0">
               {['일', '월', '화', '수', '목', '금', '토'].map((day, idx) => (
-                <div key={day} className={`py-2.5 text-center text-sm font-black ${idx === 0 ? 'text-red-500' : idx === 6 ? 'text-blue-500' : 'text-gray-500'}`}>
+                <div key={day} className={`py-2.5 text-center text-ui-body font-black ${idx === 0 ? 'text-red-500' : idx === 6 ? 'text-blue-500' : 'text-gray-500'}`}>
                   {day}
                 </div>
               ))}
@@ -182,7 +182,7 @@ export default function WorkoutLog() {
                   >
                     <div className="flex justify-between items-start shrink-0">
                       <span
-                        className={`text-sm font-bold w-6 h-6 flex items-center justify-center rounded-full ${
+                        className={`text-ui-body font-bold w-5 h-5 flex items-center justify-center rounded-full ${
                           isToday
                             ? 'bg-letusBlue text-white'
                             : !cell.isCurrentMonth
@@ -230,11 +230,11 @@ export default function WorkoutLog() {
               <div className="flex items-center justify-between min-h-[28px]">
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-3.5 bg-letusOrange rounded-full"></span>
-                  <h3 className="font-bold text-gray-800 text-sm leading-none">운동 기록 LIST</h3>
+                  <h3 className="font-bold text-gray-800 text-ui-body leading-none">운동 기록 LIST</h3>
                 </div>
-                <span className="bg-blue-100 text-letusBlue text-xs font-bold px-2 py-0.5 rounded-full leading-none">{sidebarLogs.length}건</span>
+                <span className="bg-blue-100 text-letusBlue text-ui-caption font-bold px-2 py-0.5 rounded-full leading-none">{sidebarLogs.length}건</span>
               </div>
-              <div className="text-xs font-bold text-gray-500 pl-3 leading-none">{listDate}</div>
+              <div className="text-ui-caption font-bold text-gray-500 pl-3 leading-none">{listDate}</div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 custom-scrollbar">
@@ -251,8 +251,8 @@ export default function WorkoutLog() {
                     <div className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors">
                       <button onClick={() => toggleExpand(group.routineId)} className="flex items-center gap-2 min-w-0 flex-1 text-left">
                         <ChevronDown className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        <span className="text-sm font-bold text-gray-800 truncate">{routine?.name || '루틴'}</span>
-                        <span className="text-xs font-bold text-gray-400 shrink-0">
+                        <span className="text-ui-body font-bold text-gray-800 truncate">{routine?.name || '루틴'}</span>
+                        <span className="text-ui-caption font-bold text-gray-400 shrink-0">
                           {completedCount}/{group.logs.length} 완료
                         </span>
                       </button>
@@ -263,7 +263,7 @@ export default function WorkoutLog() {
                             e.stopPropagation()
                             setRescheduleTarget({ routineId: group.routineId, oldDate: groupDate, routineName: routine?.name || '루틴' })
                           }}
-                          className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-letusBlue px-1.5 py-1 rounded hover:bg-white opacity-0 group-hover/routine:opacity-100 transition-opacity"
+                          className="flex items-center gap-1 text-ui-caption font-bold text-gray-400 hover:text-letusBlue px-1.5 py-1 rounded hover:bg-white opacity-0 group-hover/routine:opacity-100 transition-opacity"
                           title="날짜 변경"
                         >
                           <CalendarClock className="w-3.5 h-3.5" />
@@ -276,7 +276,7 @@ export default function WorkoutLog() {
                               e.stopPropagation()
                               navigate(`/mobile/session?routineId=${group.routineId}&date=${groupDate}`)
                             }}
-                            className="flex items-center gap-1 text-xs font-bold text-white bg-letusBlue hover:bg-blue-600 px-2 py-1 rounded transition-colors"
+                            className="flex items-center gap-1 text-ui-caption font-bold text-white bg-letusBlue hover:bg-blue-600 px-2 py-1 rounded transition-colors"
                             title="운동 시작"
                           >
                             <Play className="w-3 h-3" fill="currentColor" />
@@ -293,20 +293,20 @@ export default function WorkoutLog() {
               {standaloneLogs.map(renderLogRow)}
 
               {sidebarLogs.length === 0 && (
-                <div className="text-center text-sm text-gray-400 py-10 font-bold">{searchQuery ? '검색 결과가 없습니다.' : '이 날짜엔 기록이 없습니다.'}</div>
+                <div className="text-center text-ui-body text-gray-400 py-10 font-bold">{searchQuery ? '검색 결과가 없습니다.' : '이 날짜엔 기록이 없습니다.'}</div>
               )}
             </div>
 
             <div className="p-3 border-t border-gray-100 shrink-0 flex flex-col gap-2">
               <button
                 onClick={() => openCreate(listDate)}
-                className="w-full bg-letusBlue text-white text-sm font-bold py-2.5 rounded-lg hover:bg-blue-600 transition-colors"
+                className="w-full bg-letusBlue text-white text-ui-body font-bold py-2.5 rounded-lg hover:bg-blue-600 transition-colors"
               >
                 + 운동 기록 추가
               </button>
               <button
                 onClick={() => setShowBodyModal(true)}
-                className="w-full bg-emerald-600 text-white text-sm font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition-colors"
+                className="w-full bg-emerald-600 text-white text-ui-body font-bold py-2.5 rounded-lg hover:bg-emerald-700 transition-colors"
               >
                 + 신체 기록
               </button>

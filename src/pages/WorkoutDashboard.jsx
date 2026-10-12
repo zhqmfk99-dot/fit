@@ -39,34 +39,37 @@ export default function WorkoutDashboard() {
       <PageHeader title="대시보드" color="bg-letusBlue" />
       <div className="p-4 space-y-4">
         <div className="grid grid-cols-3 gap-2">
-          <StatCard label="운동 횟수" value={sessionCount} unit="회" icon={CalendarCheck} color="text-blue-600" />
-          <StatCard label="총 볼륨" value={totalVolumeSum.toLocaleString()} unit="kg" icon={TrendingUp} color="text-indigo-600" />
-          <StatCard label="평균 피로도" value={avgFatigue} unit="/5" icon={Flame} color="text-orange-500" />
+          <StatCard horizontal label="운동 횟수" value={sessionCount} unit="회" icon={CalendarCheck} color="text-blue-600" />
+          <StatCard horizontal label="총 볼륨" value={totalVolumeSum.toLocaleString()} unit="kg" icon={TrendingUp} color="text-indigo-600" />
+          <StatCard horizontal label="평균 피로도" value={avgFatigue} unit="/5" icon={Flame} color="text-orange-500" />
         </div>
 
         <BodyTrendChart records={bodyRecords} />
 
         {/* 부위별 피로도 / 볼륨 추이 좌우 배치 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <MuscleFatigueMap logs={logs} exercises={exercises} selectedMuscle={selectedMuscle} onSelectMuscle={setSelectedMuscle} />
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          {/* 좌우 카드 높이를 맞추고, 그래프가 남는 세로 공간을 채운다 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col">
             <h3 className="text-base font-bold text-slate-700 mb-3">
               볼륨 추이
               {selectedMuscle && <span className="text-letusBlue"> · {MUSCLE_LABELS[selectedMuscle] || selectedMuscle}</span>}
             </h3>
             {targetExercises && targetExercises.length === 0 ? (
-              <div className="h-[200px] flex items-center justify-center text-sm text-gray-400 font-bold">이 부위에 해당하는 운동 기록이 없습니다.</div>
+              <div className="flex-1 min-h-[200px] flex items-center justify-center text-sm text-gray-400 font-bold">이 부위에 해당하는 운동 기록이 없습니다.</div>
             ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={trend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="volume" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="flex-1 min-h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="volume" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </div>
         </div>

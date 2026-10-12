@@ -1,9 +1,9 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Menu, LogOut, User } from 'lucide-react'
 import { ALL_MENUS } from '../menuConfig.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
-import ProfileModal from './ProfileModal.jsx'
+import ProfileModal from './web/ProfileModal.jsx'
 
 export default function Header({ isOpen, setIsOpen }) {
   const location = useLocation()

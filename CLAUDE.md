@@ -27,8 +27,21 @@ React + Vite + Tailwind, 데이터/인증은 Supabase, 배포는 Vercel.
 - **공유(데이터·로직)**: `context/WorkoutLogsContext.jsx`, `hooks/*`, `lib/*`. 화면마다 렌더링만 다르고 동작은 같아야 하는 로직은 훅으로 둔다.
 - **분리(UI)**: 페이지 컴포넌트와 레이아웃은 웹앱용/PWA용을 각각 둔다. 새 UI를 만들 때 한쪽 파일을 반응형(`md:`)으로 억지로 합치지 않는다.
 - **PWA 대시보드**: 웹앱 대시보드를 수정하기 전 모습 그대로 `MobileDashboard.jsx`로 복제해 분리했다. 이후 웹앱 대시보드 수정은 PWA에 영향이 없다.
-- **웹앱 전용 컴포넌트**: `BodyTrendChart.jsx`(신체 추이 그래프), `BodyRecordModal.jsx`(신체 기록 입력). PWA에 넣을 때는 PWA용 UI를 따로 만든다.
+- **웹앱 전용 컴포넌트**: `components/web/` 폴더(루틴·운동 기록·운동 리스트 모달, 일정 변경 모달, 날짜 입력, 내 정보 모달)와 `BodyTrendChart.jsx`, `BodyRecordModal.jsx`. 웹앱 화면은 이 복사본을 쓰고, PWA는 `components/`의 원본을 그대로 쓴다. 둘은 로직이 같아도 UI(글자 크기 등)는 따로 수정한다. 기능(로직)을 바꿀 때는 양쪽 파일을 모두 확인한다.
 - **공용 컴포넌트**: `components/`의 모달·입력 컴포넌트는 양쪽에서 쓴다. 한쪽 UI만 바꿔야 하면 공용 컴포넌트를 고치지 말고 복제하거나 props로 분기한다. 공용 컴포넌트를 고칠 때는 다른 쪽 화면에 미치는 영향을 확인한다.
+
+## 웹앱 글자 크기 표준
+웹앱 화면의 글자 크기는 `tailwind.config.js`에 정의한 토큰을 쓴다. 새 화면·수정 시 `text-xs/sm/lg` 대신 아래를 쓴다.
+
+| 토큰 | 크기 | 용도 |
+|---|---|---|
+| `text-ui-title` | 14px | 카드·섹션 제목, 년월 |
+| `text-ui-body` | 11px | 본문, 버튼, 요일, 날짜 숫자 |
+| `text-ui-caption` | 10px | 보조 설명, 뱃지, 건수 |
+
+- 적용 완료: 웹앱 **기록**, **루틴** 화면 본문, 웹앱 **모달 전부**(`components/web/*`, `BodyRecordModal`). 대시보드는 사용자가 현재 크기로 확정(변경 금지).
+- 미적용(요청 시 순차 적용): 운동 리스트 화면 본문, 로그인/재설정 화면, 사이드바·헤더.
+- PWA(모바일) 화면은 이 표준과 별개로 따로 정한다.
 
 ## 데이터 / 인증
 - Supabase 클라이언트: `src/lib/supabase.js` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`는 `.env.local`, Vercel 환경변수).
