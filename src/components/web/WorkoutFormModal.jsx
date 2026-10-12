@@ -3,6 +3,7 @@ import DateInput from './DateInput.jsx'
 import { setCount, avgReps, avgWeight } from '../../lib/workoutMetrics.js'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
+import { buildTagIndex, matchesQuery, aliasMatch } from './exerciseSearch.js'
 
 const ACCENT = 'bg-letusOrange'
 
@@ -23,7 +24,10 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
   const isEdit = !!row
   const { routines, exercises: exerciseCatalog } = useWorkoutLogs()
   const knownExercises = useMemo(() => getKnownExerciseNames(routines, exerciseCatalog), [routines, exerciseCatalog])
-  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => n.toLowerCase().includes(query.toLowerCase())) : knownExercises)
+  // 이름뿐 아니라 태그(별칭)로도 찾는다. 선택하면 정식 명칭이 입력된다.
+  const tagsByName = useMemo(() => buildTagIndex(exerciseCatalog), [exerciseCatalog])
+  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => matchesQuery(n, tagsByName.get(n), query)) : knownExercises)
+  const aliasHint = (n, query) => aliasMatch(n, tagsByName.get(n), query)
 
   const [form, setForm] = useState({
     date: row?.date || initialDate || '',
@@ -121,6 +125,7 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
                     className="w-full text-left px-3.5 py-2 text-ui-body text-gray-700 hover:bg-orange-50 border-b border-gray-50 last:border-0"
                   >
                     {renderHighlight(nameOption, form.exercise)}
+                    {aliasHint(nameOption, form.exercise) && <span className="ml-1.5 text-ui-caption text-gray-400">({aliasHint(nameOption, form.exercise)})</span>}
                   </button>
                 ))}
               </div>

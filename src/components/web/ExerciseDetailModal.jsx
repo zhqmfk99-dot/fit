@@ -1,4 +1,5 @@
 ﻿import { MUSCLE_LABELS } from '../../lib/muscleMap.js'
+import { equipmentBadgeClass } from './equipmentStyle.js'
 
 export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) {
   if (!row) return null
@@ -37,7 +38,33 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
 
           <div>
             <label className="block text-ui-body font-bold text-gray-600 mb-1.5">사용장비</label>
-            <span className="px-3 py-1.5 rounded-full text-ui-body font-bold bg-blue-50 text-letusBlue">{row.equipment || '-'}</span>
+            <span className={`px-3 py-1.5 rounded-full text-ui-body font-bold ${row.equipment ? equipmentBadgeClass(row.equipment) : 'bg-gray-100 text-gray-500'}`}>{row.equipment || '-'}</span>
+          </div>
+
+          <div className="flex gap-6">
+            <div>
+              <label className="block text-ui-body font-bold text-gray-600 mb-1.5">동작 패턴</label>
+              <span className="px-3 py-1.5 rounded-full text-ui-body font-bold bg-violet-50 text-violet-600">{row.movementPattern || '-'}</span>
+            </div>
+            <div>
+              <label className="block text-ui-body font-bold text-gray-600 mb-1.5">운동 유형</label>
+              <span className="px-3 py-1.5 rounded-full text-ui-body font-bold bg-gray-100 text-gray-600">{row.exerciseType || '-'}</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-ui-body font-bold text-gray-600 mb-1.5">태그</label>
+            {row.tags?.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {row.tags.map(tag => (
+                  <span key={tag} className="px-2.5 py-1 rounded-full text-ui-caption font-bold bg-slate-100 text-slate-600">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-ui-body text-gray-400">-</span>
+            )}
           </div>
         </div>
 

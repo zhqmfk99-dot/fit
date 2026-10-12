@@ -34,7 +34,8 @@ export function useExerciseManager() {
     exitEditMode()
   }
   const handleFormSave = saved => {
-    setExercises(prev => (formRow ? prev.map(e => (e.id === saved.id ? saved : e)) : [saved, ...prev]))
+    // 기존 값 위에 덮어쓴다 — PWA 수정 폼은 동작 패턴·유형·태그를 모르므로, 통째로 교체하면 그 값들이 지워진다.
+    setExercises(prev => (formRow ? prev.map(e => (e.id === saved.id ? { ...e, ...saved } : e)) : [saved, ...prev]))
   }
   const handleDelete = exercise => {
     if (!confirm(`"${exercise.name}" 운동을 삭제할까요?`)) return

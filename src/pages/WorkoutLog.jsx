@@ -145,7 +145,7 @@ export default function WorkoutLog() {
                 placeholder="운동명 검색"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-3 pr-8 py-1.5 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:border-letusBlue w-full md:w-56"
+                className="pl-3 pr-8 py-1.5 border border-gray-300 rounded-lg text-ui-body font-medium focus:outline-none focus:border-letusBlue w-full md:w-56"
               />
               <svg className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

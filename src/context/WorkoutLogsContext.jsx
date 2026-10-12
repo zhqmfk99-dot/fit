@@ -5,8 +5,24 @@ import { generateScheduledLogs } from '../lib/scheduleGenerator.js'
 const WorkoutLogsContext = createContext(null)
 
 // ── DB 행 ↔ 앱 객체 변환 ─────────────────────────────────────────
-const exerciseFromRow = r => ({ id: r.id, name: r.name, muscles: r.muscles ?? [], equipment: r.equipment })
-const exerciseToRow = e => ({ id: e.id, name: e.name, muscles: e.muscles ?? [], equipment: e.equipment ?? null })
+const exerciseFromRow = r => ({
+  id: r.id,
+  name: r.name,
+  muscles: r.muscles ?? [],
+  equipment: r.equipment,
+  movementPattern: r.movement_pattern ?? null,
+  exerciseType: r.exercise_type ?? null,
+  tags: r.tags ?? [],
+})
+const exerciseToRow = e => ({
+  id: e.id,
+  name: e.name,
+  muscles: e.muscles ?? [],
+  equipment: e.equipment ?? null,
+  movement_pattern: e.movementPattern ?? null,
+  exercise_type: e.exerciseType ?? null,
+  tags: e.tags ?? [],
+})
 
 const routineFromRow = r => ({ id: r.id, name: r.name, isActive: r.is_active, repeatDays: r.repeat_days ?? [], exercises: r.exercises ?? [] })
 const routineToRow = r => ({ id: r.id, name: r.name, is_active: !!r.isActive, repeat_days: r.repeatDays ?? [], exercises: r.exercises ?? [] })

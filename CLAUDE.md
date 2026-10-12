@@ -39,8 +39,8 @@ React + Vite + Tailwind, 데이터/인증은 Supabase, 배포는 Vercel.
 | `text-ui-body` | 11px | 본문, 버튼, 요일, 날짜 숫자 |
 | `text-ui-caption` | 10px | 보조 설명, 뱃지, 건수 |
 
-- 적용 완료: 웹앱 **기록**, **루틴** 화면 본문, 웹앱 **모달 전부**(`components/web/*`, `BodyRecordModal`). 대시보드는 사용자가 현재 크기로 확정(변경 금지).
-- 미적용(요청 시 순차 적용): 운동 리스트 화면 본문, 로그인/재설정 화면, 사이드바·헤더.
+- 적용 완료: 웹앱 **기록**, **루틴**, **운동 리스트** 화면 본문, 웹앱 **모달 전부**(`components/web/*`, `BodyRecordModal`). 대시보드는 사용자가 현재 크기로 확정(변경 금지).
+- 미적용(요청 시 순차 적용): 로그인/재설정 화면, 사이드바·헤더.
 - PWA(모바일) 화면은 이 표준과 별개로 따로 정한다.
 
 ## 데이터 / 인증
@@ -49,7 +49,8 @@ React + Vite + Tailwind, 데이터/인증은 Supabase, 배포는 Vercel.
 - 데이터 상태는 `WorkoutLogsContext`가 불러오고 저장한다. `setLogs`/`setRoutines`/`setExercises`는 `useState` setter처럼 쓰되 변경분이 자동으로 Supabase에 저장된다.
 - 모든 ID는 UUID(`crypto.randomUUID()`).
 - 로그인: 이메일(=아이디)+비밀번호. 비밀번호 최소 6자. 아이디/비밀번호 찾기, 비밀번호 재설정, 내 정보, 회원 탈퇴 포함.
-- SQL: `supabase/schema.sql` → `auth_profiles.sql` → `profile_fields.sql` → `body_records.sql` 순서로 한 번씩 실행.
+- SQL: `supabase/schema.sql` → `auth_profiles.sql` → `profile_fields.sql` → `body_records.sql` → `seed_exercises.sql`(기본 운동 120개 + `exercises`의 동작 패턴·운동 유형·태그 칼럼, 신규 가입자 자동 지급 트리거 포함) 순서로 한 번씩 실행. `seed_exercises.sql`은 앱 배포 **전에** 실행해야 한다(새 칼럼이 없으면 운동 저장이 실패한다).
+- 운동(`exercises`)에는 이름(정식 명칭), 부위, 장비, 동작 패턴(밀기/당기기/스쿼트/힌지/런지/코어/기타), 운동 유형(복합관절/단관절), 태그(별칭)가 있다. 동작 패턴·유형·태그는 PWA 수정 폼이 모르는 값이라 `useExerciseManager`가 기존 값 위에 덮어쓰는 방식으로 저장한다(통째로 교체하면 지워짐).
 
 ## 작업 규칙
 - Windows 경로 길이 문제로 저장소는 `C:\dev\fit`에 둔다.

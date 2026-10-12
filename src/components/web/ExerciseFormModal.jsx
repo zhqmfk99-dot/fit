@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react'
-import { TRAINABLE_MUSCLES, MUSCLE_LABELS, EQUIPMENT_OPTIONS } from '../../lib/muscleMap.js'
+import { TRAINABLE_MUSCLES, MUSCLE_LABELS, EQUIPMENT_OPTIONS, MOVEMENT_PATTERNS, EXERCISE_TYPES } from '../../lib/muscleMap.js'
 
 const ACCENT = 'bg-letusOrange'
 
@@ -9,7 +9,26 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
   const [name, setName] = useState(row?.name || '')
   const [muscles, setMuscles] = useState(row?.muscles || [])
   const [equipment, setEquipment] = useState(row?.equipment || '')
+  const [movementPattern, setMovementPattern] = useState(row?.movementPattern || '')
+  const [exerciseType, setExerciseType] = useState(row?.exerciseType || '')
+  const [tags, setTags] = useState(row?.tags || [])
+  const [tagInput, setTagInput] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+
+  // 태그 추가 — Enter 또는 쉼표로 확정. 공백만 있거나 이미 있는 태그는 무시한다.
+  const addTag = raw => {
+    const t = raw.trim()
+    if (t && !tags.some(x => x.toLowerCase() === t.toLowerCase())) setTags(prev => [...prev, t])
+    setTagInput('')
+  }
+  const handleTagKeyDown = e => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag(tagInput)
+    } else if (e.key === 'Backspace' && !tagInput && tags.length) {
+      setTags(prev => prev.slice(0, -1))
+    }
+  }
 
   const toggleMuscle = muscle => {
     setMuscles(prev => (prev.includes(muscle) ? prev.filter(m => m !== muscle) : [...prev, muscle]))
@@ -22,11 +41,18 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
     if (existingNames.includes(name.trim())) return setErrorMsg('이미 등록된 운동명입니다.')
     setErrorMsg('')
 
+    // 입력창에 확정하지 않고 남아 있는 태그도 저장 시 함께 반영한다
+    const pendingTag = tagInput.trim()
+    const finalTags = pendingTag && !tags.some(x => x.toLowerCase() === pendingTag.toLowerCase()) ? [...tags, pendingTag] : tags
+
     onSave({
       id: row?.id ?? crypto.randomUUID(),
       name: name.trim(),
       muscles,
       equipment,
+      movementPattern: movementPattern || null,
+      exerciseType: exerciseType || null,
+      tags: finalTags,
     })
     onClose()
   }
@@ -115,6 +141,74 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
                   </button>
                 )
               })}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-ui-body font-bold text-gray-700">
+              동작 패턴 <span className="text-ui-caption font-normal text-gray-400">(선택)</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {MOVEMENT_PATTERNS.map(item => {
+                const isSelected = movementPattern === item
+                return (
+                  <button
+                    key={item}
+                    onClick={() => setMovementPattern(isSelected ? '' : item)}
+                    className={`px-3 py-1.5 rounded-full text-ui-body font-bold transition-colors ${
+                      isSelected ? 'bg-letusBlue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {item}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-ui-body font-bold text-gray-700">
+              운동 유형 <span className="text-ui-caption font-normal text-gray-400">(선택)</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {EXERCISE_TYPES.map(item => {
+                const isSelected = exerciseType === item
+                return (
+                  <button
+                    key={item}
+                    onClick={() => setExerciseType(isSelected ? '' : item)}
+                    className={`px-3 py-1.5 rounded-full text-ui-body font-bold transition-colors ${
+                      isSelected ? 'bg-letusBlue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {item}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-ui-body font-bold text-gray-700">
+              태그 <span className="text-ui-caption font-normal text-gray-400">(별칭·다른 이름, Enter로 추가)</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5 border border-gray-300 rounded-[4px] px-2.5 py-2 bg-white focus-within:border-letusOrange transition-all">
+              {tags.map(tag => (
+                <span key={tag} className="flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-ui-caption font-bold">
+                  {tag}
+                  <button type="button" onClick={() => setTags(prev => prev.filter(x => x !== tag))} className="text-slate-400 hover:text-red-500" title="태그 삭제">
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+                onBlur={() => addTag(tagInput)}
+                placeholder={tags.length ? '' : '예: 스쿼트의 별칭 "백스쿼트"'}
+                className="flex-1 min-w-[120px] text-ui-body focus:outline-none bg-transparent"
+              />
             </div>
           </div>
         </div>

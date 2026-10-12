@@ -63,10 +63,7 @@ export default function WorkoutRoutine() {
       <div className="p-4 space-y-3">
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 min-h-[56px] flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h2 className="text-ui-title font-black text-gray-800 tracking-tight">
-              루틴 {routines.length}건
-              {selectedCount > 0 && <span className="text-letusBlue font-bold"> · {selectedCount}건 선택</span>}
-            </h2>
+            {selectedCount > 0 && <span className="text-ui-title font-black text-letusBlue">{selectedCount}건 선택</span>}
             <div className="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-200">
               {FILTERS.map(f => (
                 <button

@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { CalendarCheck, TrendingUp, Flame } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import StatCard from '../components/StatCard.jsx'
-import MuscleFatigueMap from '../components/MuscleFatigueMap.jsx'
+import MuscleFatigueMap from '../components/web/MuscleFatigueMap.jsx'
 import BodyTrendChart from '../components/BodyTrendChart.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { totalVolume } from '../lib/workoutMetrics.js'

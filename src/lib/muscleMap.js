@@ -35,7 +35,14 @@ export const LOWER_BODY_MUSCLES = ['quadriceps', 'hamstring', 'gluteal', 'adduct
 export const TRAINABLE_MUSCLES = [...UPPER_BODY_MUSCLES, ...LOWER_BODY_MUSCLES]
 
 // 운동 등록 화면에서 고를 수 있는 사용장비 목록
-export const EQUIPMENT_OPTIONS = ['바벨', '덤벨', '머신', '케이블', '벤치', '스미스머신', '밴드', '맨몸', '기타']
+export const EQUIPMENT_OPTIONS = ['바벨', '덤벨', '머신', '케이블', '벤치', '스미스머신', '밴드', '불가리안백', '맨몸', '기타']
+
+// 동작 패턴 — 상체 고립 운동은 푸시/풀 분할 기준(삼두·어깨 레이즈는 밀기, 이두·후면 어깨는 당기기)으로 분류한다.
+// 어느 패턴에도 안 맞는 고립 운동(종아리, 내전·외전 등)은 '기타'.
+export const MOVEMENT_PATTERNS = ['밀기', '당기기', '스쿼트', '힌지', '런지', '코어', '기타']
+
+// 운동 유형 — 관절을 여러 개 쓰는 복합관절 vs 한 관절만 쓰는 단관절
+export const EXERCISE_TYPES = ['복합관절', '단관절']
 
 const FATIGUE_MAX = 5
 

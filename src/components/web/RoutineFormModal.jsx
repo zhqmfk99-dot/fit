@@ -2,6 +2,7 @@
 import { GripVertical } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
+import { buildTagIndex, matchesQuery, aliasMatch } from './exerciseSearch.js'
 
 const ACCENT = 'bg-letusOrange'
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
@@ -33,7 +34,10 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
   const [dragIndex, setDragIndex] = useState(null)
   const [dropdownIdx, setDropdownIdx] = useState(null)
 
-  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => n.toLowerCase().includes(query.toLowerCase())) : knownExercises)
+  // 이름뿐 아니라 태그(별칭)로도 찾는다. 선택하면 정식 명칭이 입력된다.
+  const tagsByName = useMemo(() => buildTagIndex(exerciseCatalog), [exerciseCatalog])
+  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => matchesQuery(n, tagsByName.get(n), query)) : knownExercises)
+  const aliasHint = (n, query) => aliasMatch(n, tagsByName.get(n), query)
 
   const toggleDay = day => {
     setRepeatDays(prev => (prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]))
@@ -218,6 +222,7 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
                                 className="w-full text-left px-3 py-2 text-ui-body text-gray-700 hover:bg-orange-50 border-b border-gray-50 last:border-0"
                               >
                                 {renderHighlight(nameOption, ex.exercise)}
+                                {aliasHint(nameOption, ex.exercise) && <span className="ml-1.5 text-ui-caption text-gray-400">({aliasHint(nameOption, ex.exercise)})</span>}
                               </button>
                             ))}
                           </div>
