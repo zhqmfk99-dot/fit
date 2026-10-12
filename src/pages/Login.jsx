@@ -13,13 +13,14 @@ function maskId(email) {
 }
 
 export default function Login() {
-  const { signIn, signUp, findIdsByName, requestPasswordReset } = useAuth()
+  const { signIn, signUp, findIdsByName, requestPasswordReset, authError } = useAuth()
   const [mode, setMode] = useState('signin') // 'signin' | 'signup' | 'findId' | 'findPw'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
+  // 재설정 링크가 만료되었거나 이미 사용된 경우 등, 주소에 실려 온 인증 오류를 처음에 보여준다
+  const [message, setMessage] = useState(authError ? `링크가 유효하지 않습니다: ${authError} 비밀번호 찾기를 다시 진행해 주세요.` : '')
   const [foundIds, setFoundIds] = useState(null) // 아이디 찾기 결과 (null이면 아직 검색 전)
   const [sentTo, setSentTo] = useState('') // 비밀번호 재설정 메일을 보낸 주소(마스킹해서 표시)
 

@@ -5,11 +5,19 @@ const AuthContext = createContext(null)
 
 export const MIN_PASSWORD_LENGTH = 6 // Supabase 기본 최소 길이와 맞춤
 
+// 재설정 메일 링크는 주소 뒤 #해시로 토큰(또는 오류)을 싣고 온다.
+// Supabase가 이 해시를 처리하며 보내는 PASSWORD_RECOVERY 이벤트는 React가 구독하기 전에 지나갈 수 있어서,
+// 모듈이 로드되는 시점(해시가 지워지기 전)에 미리 읽어 둔다.
+const initialHash = new URLSearchParams(window.location.hash.slice(1))
+const startedInRecovery = initialHash.get('type') === 'recovery'
+const initialAuthError = initialHash.get('error_description')?.replace(/\+/g, ' ') ?? ''
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   // 비밀번호 재설정 메일의 링크로 들어온 경우 true — 새 비밀번호를 입력받을 때까지 앱 대신 재설정 화면을 보여준다
-  const [recovery, setRecovery] = useState(false)
+  const [recovery, setRecovery] = useState(startedInRecovery)
+  const [authError, setAuthError] = useState(initialAuthError)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -50,7 +58,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, recovery, signIn, signUp, signOut, findIdsByName, requestPasswordReset, updatePassword }}
+      value={{ session, user: session?.user ?? null, loading, recovery, authError, clearAuthError: () => setAuthError(''), signIn, signUp, signOut, findIdsByName, requestPasswordReset, updatePassword }}
     >
       {children}
     </AuthContext.Provider>
