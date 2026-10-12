@@ -88,7 +88,7 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
     if (cleanedExercises.length > 0) cleanedExercises[cleanedExercises.length - 1].linkedToNext = false
 
     onSave({
-      id: row?.id ?? Date.now(),
+      id: row?.id ?? crypto.randomUUID(),
       name: name.trim(),
       isActive,
       repeatDays,

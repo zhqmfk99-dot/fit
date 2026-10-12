@@ -1,14 +1,145 @@
-import { createContext, useContext, useState } from 'react'
-import { workoutLogs as initialLogs, routines as initialRoutines, exerciseCatalog as initialExercises } from '../mockData.js'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase.js'
+import { generateScheduledLogs } from '../lib/scheduleGenerator.js'
 
 const WorkoutLogsContext = createContext(null)
 
+// ── DB 행 ↔ 앱 객체 변환 ─────────────────────────────────────────
+const exerciseFromRow = r => ({ id: r.id, name: r.name, muscles: r.muscles ?? [], equipment: r.equipment })
+const exerciseToRow = e => ({ id: e.id, name: e.name, muscles: e.muscles ?? [], equipment: e.equipment ?? null })
+
+const routineFromRow = r => ({ id: r.id, name: r.name, isActive: r.is_active, repeatDays: r.repeat_days ?? [], exercises: r.exercises ?? [] })
+const routineToRow = r => ({ id: r.id, name: r.name, is_active: !!r.isActive, repeat_days: r.repeatDays ?? [], exercises: r.exercises ?? [] })
+
+const logFromRow = r => ({
+  id: r.id,
+  date: r.date,
+  exercise: r.exercise,
+  routineId: r.routine_id ?? undefined,
+  targetSets: r.target_sets ?? undefined,
+  targetReps: r.target_reps ?? undefined,
+  targetWeight: r.target_weight == null ? undefined : Number(r.target_weight),
+  restSeconds: r.rest_seconds ?? undefined,
+  linkedToNext: r.linked_to_next,
+  performedSets: r.performed_sets ?? [],
+  fatigue: r.fatigue,
+  isCompleted: r.is_completed,
+})
+const logToRow = l => ({
+  id: l.id,
+  routine_id: l.routineId ?? null,
+  date: l.date,
+  exercise: l.exercise,
+  target_sets: l.targetSets ?? null,
+  target_reps: l.targetReps ?? null,
+  target_weight: l.targetWeight ?? null,
+  rest_seconds: l.restSeconds ?? null,
+  linked_to_next: !!l.linkedToNext,
+  performed_sets: l.performedSets ?? [],
+  fatigue: l.fatigue ?? null,
+  is_completed: !!l.isCompleted,
+})
+
+// 이전/다음 상태를 id로 비교해 바뀐 행만 upsert, 사라진 행은 delete 한다.
+async function persistDiff(table, prev, next, toRow) {
+  const prevById = new Map(prev.map(x => [x.id, x]))
+  const nextIds = new Set(next.map(x => x.id))
+  const changed = next.filter(x => JSON.stringify(prevById.get(x.id)) !== JSON.stringify(x))
+  const removedIds = prev.filter(x => !nextIds.has(x.id)).map(x => x.id)
+
+  if (changed.length) {
+    const { error } = await supabase.from(table).upsert(changed.map(toRow))
+    if (error) throw error
+  }
+  if (removedIds.length) {
+    const { error } = await supabase.from(table).delete().in('id', removedIds)
+    if (error) throw error
+  }
+}
+
+// useState처럼 쓸 수 있는(값 또는 함수형 업데이트) setter를 만들되, 변경분을 Supabase에 비동기로 저장한다.
+// 같은 핸들러 안에서 setter를 연달아 불러도 최신 값을 보도록 ref에 동기적으로 반영한다.
+function usePersistedState(table, toRow, queueRef, onError) {
+  const [state, setState] = useState([])
+  const ref = useRef([])
+
+  const set = useCallback(
+    updater => {
+      const prev = ref.current
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      ref.current = next
+      setState(next)
+      // 저장 순서가 뒤바뀌지 않도록 하나의 큐에 이어 붙인다
+      queueRef.current = queueRef.current.then(() => persistDiff(table, prev, next, toRow)).catch(onError)
+    },
+    [table, toRow, queueRef, onError],
+  )
+
+  // 서버에서 읽어온 값으로 덮어쓸 때(저장 없이)
+  const replace = useCallback(next => {
+    ref.current = next
+    setState(next)
+  }, [])
+
+  return [state, set, replace]
+}
+
 export function WorkoutLogsProvider({ children }) {
-  const [logs, setLogs] = useState(initialLogs)
-  const [routines, setRoutines] = useState(initialRoutines)
-  const [exercises, setExercises] = useState(initialExercises)
+  const queueRef = useRef(Promise.resolve())
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const handleError = useCallback(e => {
+    console.error(e)
+    setError(e.message || '저장 중 오류가 발생했습니다.')
+  }, [])
+
+  const [logs, setLogs, replaceLogs] = usePersistedState('workout_logs', logToRow, queueRef, handleError)
+  const [routines, setRoutines, replaceRoutines] = usePersistedState('routines', routineToRow, queueRef, handleError)
+  const [exercises, setExercises, replaceExercises] = usePersistedState('exercises', exerciseToRow, queueRef, handleError)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const [ex, ro, lo] = await Promise.all([
+        supabase.from('exercises').select('*').order('created_at', { ascending: false }),
+        supabase.from('routines').select('*').order('created_at', { ascending: false }),
+        supabase.from('workout_logs').select('*').order('date', { ascending: false }).order('created_at', { ascending: true }),
+      ])
+      if (cancelled) return
+      const firstError = ex.error || ro.error || lo.error
+      if (firstError) {
+        setError(firstError.message)
+        setLoading(false)
+        return
+      }
+      const loadedRoutines = ro.data.map(routineFromRow)
+      const loadedLogs = lo.data.map(logFromRow)
+      replaceExercises(ex.data.map(exerciseFromRow))
+      replaceRoutines(loadedRoutines)
+      replaceLogs(loadedLogs)
+      setLoading(false)
+      // 앞으로 2주치 "예정" 기록을 채워 넣는다 (이미 있으면 건너뜀)
+      const scheduled = generateScheduledLogs(loadedRoutines, loadedLogs)
+      if (scheduled.length) setLogs(prev => [...scheduled, ...prev])
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [replaceExercises, replaceRoutines, replaceLogs, setLogs])
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-sm font-bold text-gray-400">불러오는 중...</div>
+  }
+
   return (
     <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises }}>
+      {error && (
+        <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError('')}>닫기</button>
+        </div>
+      )}
       {children}
     </WorkoutLogsContext.Provider>
   )

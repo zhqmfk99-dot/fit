@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ClipboardList, ListChecks, Tags, Play } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, ListChecks, Tags, Play, LogOut } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 import QuickWorkoutModal from './QuickWorkoutModal.jsx'
 
 const MENU_ITEMS = [
@@ -19,6 +20,7 @@ const getLocalDateString = d => {
 export default function MobileMenuScreen() {
   const navigate = useNavigate()
   const { logs, setLogs, routines, setRoutines } = useWorkoutLogs()
+  const { signOut } = useAuth()
   const [showQuickModal, setShowQuickModal] = useState(false)
 
   // "운동하기"는 캘린더를 거치지 않고 오늘 예정된 루틴으로 바로 진입하는 지름길이다.
@@ -37,7 +39,7 @@ export default function MobileMenuScreen() {
   const startRoutineToday = (routineId, exerciseList) => {
     const todayDate = getLocalDateString(new Date())
     const newLogs = exerciseList.map((ex, idx) => ({
-      id: `quick_${routineId}_${idx}_${Date.now()}`,
+      id: crypto.randomUUID(),
       date: todayDate,
       exercise: ex.exercise,
       routineId,
@@ -62,7 +64,7 @@ export default function MobileMenuScreen() {
 
   // 즉석 등록은 반복 요일이 없는 1회성 루틴으로 만든다 — 매주 반복되는 루틴을 만들고 싶으면 "루틴" 화면에서 따로 등록한다.
   const handleQuickStart = exerciseList => {
-    const routineId = Date.now()
+    const routineId = crypto.randomUUID()
     const newRoutine = { id: routineId, name: '즉석 운동', isActive: false, repeatDays: [], exercises: exerciseList }
     setRoutines(prev => [...prev, newRoutine])
     startRoutineToday(routineId, exerciseList)
@@ -70,9 +72,15 @@ export default function MobileMenuScreen() {
 
   return (
     <div className="min-h-screen px-5 pt-10 pb-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-black text-gray-800">TRAINING</h1>
-        <p className="text-sm text-gray-400 font-bold mt-1">개인용 트레이닝 앱</p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-gray-800">TRAINING</h1>
+          <p className="text-sm text-gray-400 font-bold mt-1">개인용 트레이닝 앱</p>
+        </div>
+        <button onClick={signOut} className="flex items-center gap-1 text-xs font-bold text-gray-400 active:text-letusBlue">
+          <LogOut className="w-4 h-4" />
+          로그아웃
+        </button>
       </div>
 
       <button

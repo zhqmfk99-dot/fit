@@ -67,7 +67,7 @@ function buildFlatSteps(groupLogs) {
 export default function WorkoutSession() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const routineId = Number(searchParams.get('routineId'))
+  const routineId = searchParams.get('routineId')
   const date = searchParams.get('date')
   const { logs, setLogs, routines, setRoutines } = useWorkoutLogs()
 

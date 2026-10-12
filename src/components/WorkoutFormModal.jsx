@@ -47,7 +47,7 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
     const weight = Number(form.weight) || 0
 
     onSave({
-      id: row?.id ?? Date.now(),
+      id: row?.id ?? crypto.randomUUID(),
       date: form.date,
       exercise: form.exercise.trim(),
       // 이 화면은 세트별 시간을 직접 입력받지 않으니, 입력한 값으로 세트를 균일하게 채운다

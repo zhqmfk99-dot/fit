@@ -23,7 +23,7 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
     setErrorMsg('')
 
     onSave({
-      id: row?.id ?? Date.now(),
+      id: row?.id ?? crypto.randomUUID(),
       name: name.trim(),
       muscles,
       equipment,

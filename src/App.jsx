@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout.jsx'
 import { WorkoutLogsProvider } from './context/WorkoutLogsContext.jsx'
+import { useAuth } from './context/AuthContext.jsx'
+import Login from './pages/Login.jsx'
 import WorkoutDashboard from './pages/WorkoutDashboard.jsx'
 import WorkoutLog from './pages/WorkoutLog.jsx'
 import WorkoutRoutine from './pages/WorkoutRoutine.jsx'
@@ -16,8 +18,7 @@ function DesktopApp() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Navigate to="/workout/dashboard" replace />} />
-        <Route path="/workout/dashboard" element={<WorkoutDashboard />} />
+        <Route path="/" element={<Navigate to="/workout/dashboard" replace />} />        <Route path="/workout/dashboard" element={<WorkoutDashboard />} />
         <Route path="/workout/log" element={<WorkoutLog />} />
         <Route path="/workout/routine" element={<WorkoutRoutine />} />
         <Route path="/workout/exercises" element={<WorkoutExercises />} />
@@ -45,10 +46,18 @@ function MobileApp() {
 }
 
 export default function App() {
+  const { session, loading } = useAuth()
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-sm font-bold text-gray-400">불러오는 중...</div>
+  if (!session) return <Login />
+
+  // key로 사용자가 바뀌면 데이터 상태를 새로 불러온다
   return (
-    <WorkoutLogsProvider>
+    <WorkoutLogsProvider key={session.user.id}>
       <Routes>
         <Route path="/mobile/*" element={<MobileApp />} />
+        {/* 좁은 화면(휴대폰)에서 루트로 들어오면 모바일 메뉴로 보낸다 */}
+        <Route path="/" element={window.innerWidth < 768 ? <Navigate to="/mobile" replace /> : <DesktopApp />} />
         <Route path="/*" element={<DesktopApp />} />
       </Routes>
     </WorkoutLogsProvider>

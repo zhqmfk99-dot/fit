@@ -1,9 +1,11 @@
 import { useLocation } from 'react-router-dom'
-import { Menu } from 'lucide-react'
+import { Menu, LogOut } from 'lucide-react'
 import { ALL_MENUS } from '../menuConfig.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Header({ isOpen, setIsOpen }) {
   const location = useLocation()
+  const { signOut } = useAuth()
 
   let pageTitle = '트레이닝'
   ALL_MENUS.forEach(menu => {
@@ -21,6 +23,13 @@ export default function Header({ isOpen, setIsOpen }) {
         <Menu className="w-5 h-5" />
       </button>
       <h2 className="text-[19px] font-extrabold tracking-tight text-gray-800">{pageTitle}</h2>
+      <button
+        onClick={signOut}
+        className="ml-auto flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-letusBlue transition-colors"
+      >
+        <LogOut className="w-4 h-4" />
+        로그아웃
+      </button>
     </header>
   )
 }
