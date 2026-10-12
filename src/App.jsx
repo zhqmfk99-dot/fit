@@ -3,6 +3,7 @@ import Layout from './components/Layout.jsx'
 import { WorkoutLogsProvider } from './context/WorkoutLogsContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import Login from './pages/Login.jsx'
+import ResetPassword from './pages/ResetPassword.jsx'
 import WorkoutDashboard from './pages/WorkoutDashboard.jsx'
 import WorkoutLog from './pages/WorkoutLog.jsx'
 import WorkoutRoutine from './pages/WorkoutRoutine.jsx'
@@ -46,9 +47,10 @@ function MobileApp() {
 }
 
 export default function App() {
-  const { session, loading } = useAuth()
+  const { session, loading, recovery } = useAuth()
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-sm font-bold text-gray-400">불러오는 중...</div>
+  if (session && recovery) return <ResetPassword />
   if (!session) return <Login />
 
   // key로 사용자가 바뀌면 데이터 상태를 새로 불러온다
