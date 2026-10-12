@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ClipboardList, ListChecks, Tags, Play, LogOut } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, ListChecks, Tags, Play, LogOut, User } from 'lucide-react'
+import ProfileModal from '../../components/ProfileModal.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import QuickWorkoutModal from './QuickWorkoutModal.jsx'
@@ -22,6 +23,7 @@ export default function MobileMenuScreen() {
   const { logs, setLogs, routines, setRoutines } = useWorkoutLogs()
   const { signOut } = useAuth()
   const [showQuickModal, setShowQuickModal] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
   // "운동하기"는 캘린더를 거치지 않고 오늘 예정된 루틴으로 바로 진입하는 지름길이다.
   // 오늘 예정된 루틴이 없으면, 그 자리에서 즉석으로 운동을 등록하고 바로 시작할 수 있게 한다.
@@ -77,10 +79,16 @@ export default function MobileMenuScreen() {
           <h1 className="text-2xl font-black text-gray-800">TRAINING</h1>
           <p className="text-sm text-gray-400 font-bold mt-1">개인용 트레이닝 앱</p>
         </div>
-        <button onClick={signOut} className="flex items-center gap-1 text-xs font-bold text-gray-400 active:text-letusBlue">
-          <LogOut className="w-4 h-4" />
-          로그아웃
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowProfile(true)} className="flex items-center gap-1 text-xs font-bold text-gray-400 active:text-letusBlue">
+            <User className="w-4 h-4" />
+            내 정보
+          </button>
+          <button onClick={signOut} className="flex items-center gap-1 text-xs font-bold text-gray-400 active:text-letusBlue">
+            <LogOut className="w-4 h-4" />
+            로그아웃
+          </button>
+        </div>
       </div>
 
       <button
@@ -110,6 +118,8 @@ export default function MobileMenuScreen() {
           </button>
         ))}
       </div>
+
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
 
       {showQuickModal && (
         <QuickWorkoutModal
