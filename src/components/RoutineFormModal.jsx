@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { GripVertical } from 'lucide-react'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { getKnownExerciseNames } from '../lib/muscleMap.js'
+import { buildTagIndex, matchesQuery, aliasMatch } from '../lib/exerciseSearch.js'
 
 const ACCENT = 'bg-letusOrange'
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
@@ -33,7 +34,10 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
   const [dragIndex, setDragIndex] = useState(null)
   const [dropdownIdx, setDropdownIdx] = useState(null)
 
-  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => n.toLowerCase().includes(query.toLowerCase())) : knownExercises)
+  // 이름뿐 아니라 태그(별칭)로도 찾는다. 선택하면 정식 명칭이 입력된다.
+  const tagsByName = useMemo(() => buildTagIndex(exerciseCatalog), [exerciseCatalog])
+  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => matchesQuery(n, tagsByName.get(n), query)) : knownExercises)
+  const aliasHint = (n, query) => aliasMatch(n, tagsByName.get(n), query)
 
   const toggleDay = day => {
     setRepeatDays(prev => (prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]))
@@ -101,7 +105,7 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] backdrop-blur-sm p-4 fade-in">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[460px] overflow-hidden flex flex-col slide-up">
         <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-white">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center">
+          <h3 className="text-m-body font-bold text-gray-800 flex items-center">
             <span className={`w-1.5 h-3.5 ${ACCENT} rounded-full mr-2`}></span>
             {isEdit ? '루틴 수정' : '루틴 등록'}
           </h3>
@@ -114,7 +118,7 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
 
         <div className="p-6 bg-slate-50 flex-1 overflow-y-auto max-h-[70vh] space-y-4">
           {errorMsg && (
-            <div className="bg-red-50 text-red-600 text-sm font-bold p-3 rounded border border-red-100 flex items-center gap-1.5">
+            <div className="bg-red-50 text-red-600 text-m-body font-bold p-3 rounded border border-red-100 flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -128,28 +132,28 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
           )}
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-bold text-gray-700">
+            <label className="text-m-body font-bold text-gray-700">
               루틴명 <span className="text-red-500">*</span>
             </label>
             <input
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="예: 5x5 스트렝스 A"
-              className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-sm focus:outline-none focus:border-letusOrange transition-all bg-white"
+              className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-m-body focus:outline-none focus:border-letusOrange transition-all bg-white"
             />
           </div>
 
-          <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
+          <label className="flex items-center gap-2 text-m-body font-bold text-gray-700">
             <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-4 h-4 accent-letusBlue" />
             현재 진행중인 루틴으로 설정
           </label>
 
           <div className="flex flex-col gap-1.5 pt-1">
             <div className="flex justify-between items-end mb-1">
-              <label className="text-sm font-bold text-gray-700">반복 요일</label>
+              <label className="text-m-body font-bold text-gray-700">반복 요일</label>
               <button
                 onClick={handleSelectAllDays}
-                className="text-xs font-bold text-letusBlue hover:bg-blue-50 px-2 py-0.5 rounded border border-blue-200 transition-colors"
+                className="text-m-caption font-bold text-letusBlue hover:bg-blue-50 px-2 py-0.5 rounded border border-blue-200 transition-colors"
               >
                 {repeatDays.length === 7 ? '전체 해제' : '전체 선택'}
               </button>
@@ -161,7 +165,7 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
                   <button
                     key={day}
                     onClick={() => toggleDay(day)}
-                    className={`w-9 h-9 rounded-full text-sm font-bold transition-all flex items-center justify-center ${
+                    className={`w-9 h-9 rounded-full text-m-body font-bold transition-all flex items-center justify-center ${
                       isSelected ? 'bg-letusBlue text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                     }`}
                   >
@@ -173,7 +177,7 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-bold text-gray-700">운동 목록</label>
+            <label className="text-m-body font-bold text-gray-700">운동 목록</label>
             <div className="space-y-2">
               {exercises.map((ex, idx) => {
                 const isGrouped = !!ex.linkedToNext || (idx > 0 && !!exercises[idx - 1].linkedToNext)
@@ -204,7 +208,7 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
                           onFocus={() => setDropdownIdx(idx)}
                           onBlur={() => setTimeout(() => setDropdownIdx(prev => (prev === idx ? null : prev)), 150)}
                           placeholder="운동명"
-                          className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusOrange"
+                          className="w-full border border-gray-200 rounded px-2 py-1.5 text-m-body focus:outline-none focus:border-letusOrange"
                         />
                         {dropdownIdx === idx && suggestionsFor(ex.exercise).length > 0 && (
                           <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-white border border-orange-200 rounded-lg shadow-lg overflow-y-auto max-h-[160px]">
@@ -215,9 +219,10 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
                                   updateExercise(idx, 'exercise', nameOption)
                                   setDropdownIdx(null)
                                 }}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 border-b border-gray-50 last:border-0"
+                                className="w-full text-left px-3 py-2 text-m-body text-gray-700 hover:bg-orange-50 border-b border-gray-50 last:border-0"
                               >
                                 {renderHighlight(nameOption, ex.exercise)}
+                                {aliasHint(nameOption, ex.exercise) && <span className="ml-1.5 text-m-caption text-gray-400">({aliasHint(nameOption, ex.exercise)})</span>}
                               </button>
                             ))}
                           </div>
@@ -239,21 +244,21 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
                         value={ex.sets}
                         onChange={e => updateExercise(idx, 'sets', e.target.value)}
                         placeholder="세트"
-                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusOrange"
+                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-m-body focus:outline-none focus:border-letusOrange"
                       />
                       <input
                         type="number"
                         value={ex.reps}
                         onChange={e => updateExercise(idx, 'reps', e.target.value)}
                         placeholder="반복"
-                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusOrange"
+                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-m-body focus:outline-none focus:border-letusOrange"
                       />
                       <input
                         type="number"
                         value={ex.weight}
                         onChange={e => updateExercise(idx, 'weight', e.target.value)}
                         placeholder="kg"
-                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusOrange"
+                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-m-body focus:outline-none focus:border-letusOrange"
                       />
                       <input
                         type="number"
@@ -261,11 +266,11 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
                         onChange={e => updateExercise(idx, 'restSeconds', e.target.value)}
                         placeholder="휴식(초)"
                         title="세트간 휴식시간(초), 기본 90초"
-                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusOrange"
+                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-m-body focus:outline-none focus:border-letusOrange"
                       />
                     </div>
                     {idx < exercises.length - 1 && (
-                      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 cursor-pointer">
+                      <label className="flex items-center gap-1.5 text-m-caption font-bold text-gray-500 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={!!ex.linkedToNext}
@@ -279,7 +284,7 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
                 </div>
               )})}
             </div>
-            <button onClick={addExercise} className="text-sm font-bold text-letusBlue hover:opacity-70 transition-opacity self-start">
+            <button onClick={addExercise} className="text-m-body font-bold text-letusBlue hover:opacity-70 transition-opacity self-start">
               + 운동 추가
             </button>
           </div>
@@ -289,13 +294,13 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-[9px] border border-gray-300 text-gray-600 text-sm font-bold rounded-[3px] hover:bg-gray-50 transition-colors"
+            className="px-5 py-2.5 border border-gray-300 text-gray-600 text-m-body font-bold rounded-[3px] hover:bg-gray-50 transition-colors"
           >
             취소
           </button>
           <button
             onClick={handleSave}
-            className="px-5 py-[9px] bg-letusBlue text-white text-sm font-bold rounded-[3px] hover:bg-blue-600 transition-colors"
+            className="px-5 py-2.5 bg-letusBlue text-white text-m-body font-bold rounded-[3px] hover:bg-blue-600 transition-colors"
           >
             저장
           </button>

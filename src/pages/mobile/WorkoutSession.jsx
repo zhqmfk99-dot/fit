@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { X } from 'lucide-react'
+import { X, Check, Link2 } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
 
 const DEFAULT_REST_SECONDS = 90
+// 세션이 끝나거나 종료할 때 돌아갈 곳 — 모바일 기록 화면 (데스크탑 경로 /workout/log로 가면 헤더 없는 데스크탑 화면이 열린다)
+const LOG_PATH = '/mobile/log'
 
 function StepperCard({ label, value, step, unit, onChange }) {
   return (
     <div className="bg-white border border-gray-200 rounded-2xl px-5 py-4 shadow-sm">
-      <div className="text-xs font-bold text-gray-400 mb-2">{label}</div>
+      <div className="text-m-caption font-bold text-gray-400 mb-2">{label}</div>
       <div className="flex items-center justify-between">
         <button
           onClick={() => onChange(Math.max(0, value - step))}
@@ -17,9 +19,9 @@ function StepperCard({ label, value, step, unit, onChange }) {
         >
           −
         </button>
-        <span className="text-3xl font-black text-gray-800 tabular-nums">
+        <span className="text-2xl font-black text-gray-800 tabular-nums">
           {value}
-          {unit && <span className="text-sm font-bold text-gray-400 ml-1">{unit}</span>}
+          {unit && <span className="text-m-body font-bold text-gray-400 ml-1">{unit}</span>}
         </span>
         <button
           onClick={() => onChange(value + step)}
@@ -73,15 +75,30 @@ export default function WorkoutSession() {
 
   const routine = routines.find(r => r.id === routineId)
 
-  // 세션 시작 시점의 대기 목록·그룹을 고정해서, 완료 처리로 목록이 바뀌어도 순서가 안 흔들리게 한다
-  const [queueIds] = useState(() => logs.filter(l => l.routineId === routineId && l.date === date && !l.isCompleted).map(l => l.id))
-  const [groups] = useState(() => buildGroups(queueIds, logs))
+  // 세션 시작 시점의 운동 목록·그룹을 고정해서, 완료 처리로 목록이 바뀌어도 순서가 안 흔들리게 한다.
+  // 목록에는 이미 끝낸 운동까지 전부 보여주고(완료된 건 선택 불가), 실제로 진행하는 건 시작 시점에 안 끝난 운동뿐이다.
+  const [sessionIds] = useState(() => logs.filter(l => l.routineId === routineId && l.date === date).map(l => l.id))
+  const [initiallyDone] = useState(() => new Set(logs.filter(l => l.routineId === routineId && l.date === date && l.isCompleted).map(l => l.id)))
+  const [groups] = useState(() => buildGroups(sessionIds, logs))
   const allSessionLogs = logs.filter(l => l.routineId === routineId && l.date === date)
   const totalCount = allSessionLogs.length
   const doneCount = allSessionLogs.filter(l => l.isCompleted).length
 
-  const [groupIdx, setGroupIdx] = useState(0)
-  const currentGroupIds = groups[groupIdx] || []
+  // 그룹(수퍼세트는 여러 운동이 한 그룹)이 모두 끝났는지 — 목록에서 선택을 막고, 다음에 할 그룹을 찾는 데 쓴다
+  const isGroupDone = i => groups[i].every(id => logs.find(l => l.id === id)?.isCompleted)
+  // 현재 그룹 다음에 할 그룹: 뒤쪽을 먼저 보고, 없으면 앞쪽에 남은 것. 남은 게 없으면 -1.
+  const findNextPendingGroup = from => {
+    for (let k = 1; k < groups.length; k++) {
+      const i = (from + k) % groups.length
+      if (!isGroupDone(i)) return i
+    }
+    return -1
+  }
+
+  // 처음 시작할 그룹: 안 끝난 첫 그룹 (전부 끝났으면 0)
+  const [groupIdx, setGroupIdx] = useState(() => Math.max(0, groups.findIndex((_, i) => groups[i].some(id => !initiallyDone.has(id)))))
+  const hasPendingGroup = groups.some((_, i) => !isGroupDone(i))
+  const currentGroupIds = (groups[groupIdx] || []).filter(id => !initiallyDone.has(id))
   const groupLogs = currentGroupIds.map(id => logs.find(l => l.id === id)).filter(Boolean)
   const flatSteps = groupLogs.length ? buildFlatSteps(groupLogs) : []
 
@@ -94,6 +111,8 @@ export default function WorkoutSession() {
   const [pendingRestBefore, setPendingRestBefore] = useState(null)
   const [restTotal, setRestTotal] = useState(DEFAULT_REST_SECONDS)
   const [restRemaining, setRestRemaining] = useState(DEFAULT_REST_SECONDS)
+  // 휴식 종료 시각(ms). 남은 시간은 이 값에서 계산한다 — 화면이 꺼지거나 탭이 백그라운드여도 시간이 정확하다.
+  const [restEndAt, setRestEndAt] = useState(null)
   const [restNextAction, setRestNextAction] = useState(null)
   const [progressionNotes, setProgressionNotes] = useState([])
 
@@ -107,22 +126,55 @@ export default function WorkoutSession() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIdx])
 
+  // 휴식 카운트다운: 1초 타이머를 세는 대신 종료 시각과 현재 시각의 차이를 주기적으로 계산한다.
+  // (setTimeout 방식은 폰 화면이 꺼지거나 앱이 백그라운드로 가면 느려지거나 멈춘다)
   useEffect(() => {
-    if (subPhase !== 'rest') return
-    if (restRemaining <= 0) {
-      finishRest()
-      return
+    if (subPhase !== 'rest' || restEndAt == null) return
+    const tick = () => setRestRemaining(Math.max(0, Math.ceil((restEndAt - Date.now()) / 1000)))
+    tick()
+    const timer = setInterval(tick, 250)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', tick)
     }
-    const timer = setTimeout(() => setRestRemaining(s => s - 1), 1000)
-    return () => clearTimeout(timer)
+  }, [subPhase, restEndAt])
+
+  useEffect(() => {
+    if (subPhase === 'rest' && restRemaining <= 0) finishRest()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subPhase, restRemaining])
+
+  // 운동 중에는 화면이 저절로 꺼지지 않게 한다 (지원하는 브라우저에서만)
+  useEffect(() => {
+    let lock = null
+    let cancelled = false
+    const acquire = async () => {
+      try {
+        if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return
+        lock = await navigator.wakeLock.request('screen')
+        if (cancelled) lock.release().catch(() => {})
+      } catch {
+        // 배터리 절약 모드 등으로 거부될 수 있다 — 화면 유지가 안 될 뿐 운동 진행에는 영향 없음
+      }
+    }
+    acquire()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') acquire()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
+      lock?.release().catch(() => {})
+    }
+  }, [])
 
   if (!routine || totalCount === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 bg-letusBg">
-        <div className="text-sm text-gray-400 font-bold">진행할 세션을 찾을 수 없습니다.</div>
-        <button onClick={() => navigate('/workout/log')} className="w-full max-w-sm bg-letusBlue text-white text-sm font-bold py-4 rounded-2xl">
+        <div className="text-m-body text-gray-400 font-bold">진행할 세션을 찾을 수 없습니다.</div>
+        <button onClick={() => navigate(LOG_PATH)} className="w-full max-w-sm bg-letusBlue text-white text-m-body font-bold py-4 rounded-2xl">
           캘린더로 돌아가기
         </button>
       </div>
@@ -147,6 +199,7 @@ export default function WorkoutSession() {
   const startRest = (seconds, nextAction) => {
     setRestTotal(seconds)
     setRestRemaining(seconds)
+    setRestEndAt(Date.now() + seconds * 1000)
     setRestNextAction(nextAction)
     setSubPhase('rest')
   }
@@ -208,10 +261,12 @@ export default function WorkoutSession() {
 
     if (nextStepIdx >= flatSteps.length) {
       // 그룹(수퍼세트 포함) 전체 종료
-      if (groupIdx >= groups.length - 1) {
+      // 다음에 할 그룹은 목록에서 직접 고른 순서와 무관하게, 남은 것 중 현재 다음(뒤 → 앞 순)으로 정한다
+      const nextIdx = findNextPendingGroup(groupIdx)
+      if (nextIdx === -1) {
         setSubPhase('finished')
       } else {
-        startRest(restSeconds, { type: 'nextGroup' })
+        startRest(restSeconds, { type: 'nextGroup', groupIdx: nextIdx })
       }
       return
     }
@@ -231,13 +286,21 @@ export default function WorkoutSession() {
     if (restNextAction?.type === 'nextStep') {
       startStep(restNextAction.stepIdx, elapsed)
     } else if (restNextAction?.type === 'nextGroup') {
-      setGroupIdx(g => g + 1)
+      setGroupIdx(restNextAction.groupIdx)
     }
   }
 
   const adjustRest = delta => {
     setRestTotal(t => t + delta)
     setRestRemaining(r => Math.max(0, r + delta))
+    setRestEndAt(t => t + delta * 1000)
+  }
+
+  // 종료(X): 세트 진행·휴식 중에 누르면 그 운동의 진행 내용이 사라지므로 한 번 확인한다.
+  // (이미 끝낸 운동은 저장되어 있다 — 운동 하나의 마지막 세트를 끝낼 때 기록된다)
+  const handleExit = () => {
+    if ((subPhase === 'active' || subPhase === 'rest') && !confirm('운동을 종료할까요?\n진행 중인 운동의 세트 기록은 저장되지 않습니다.\n(이미 끝낸 운동은 저장되어 있습니다.)')) return
+    navigate(LOG_PATH)
   }
 
   const mm = String(Math.floor(restRemaining / 60)).padStart(2, '0')
@@ -250,7 +313,7 @@ export default function WorkoutSession() {
     const l = groupLogs.find(x => x.id === s.logId)
     restPreview = { exercise: l.exercise, round: s.round, targetSets: l.targetSets, isNewGroup: false }
   } else if (restNextAction?.type === 'nextGroup') {
-    const nextGroupLogs = (groups[groupIdx + 1] || []).map(id => logs.find(x => x.id === id)).filter(Boolean)
+    const nextGroupLogs = (groups[restNextAction.groupIdx] || []).filter(id => !initiallyDone.has(id)).map(id => logs.find(x => x.id === id)).filter(Boolean)
     if (nextGroupLogs.length) {
       restPreview = { exercise: nextGroupLogs[0].exercise, round: 0, targetSets: nextGroupLogs[0].targetSets, isNewGroup: true }
     }
@@ -258,53 +321,126 @@ export default function WorkoutSession() {
 
   return (
     <div className="min-h-screen flex flex-col bg-letusBg">
-      <div className="relative flex flex-col items-center pt-8 pb-6 px-6 shrink-0">
+      <div className="relative flex flex-col items-center pt-7 pb-4 px-6 shrink-0">
         <button
-          onClick={() => navigate('/workout/log')}
-          className="absolute top-6 right-5 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+          onClick={handleExit}
+          className="absolute top-5 right-4 w-11 h-11 flex items-center justify-center text-gray-400 active:text-gray-600 active:bg-gray-100 rounded-full transition-colors"
           title="종료"
+          aria-label="운동 종료"
         >
           <X className="w-5 h-5" />
         </button>
-        <div className="text-sm font-black text-gray-800">{routine.name}</div>
-        <div className="text-xs font-bold text-gray-400 mt-1">
+        <div className="text-m-body font-black text-gray-800">{routine.name}</div>
+        <div className="text-m-caption font-bold text-gray-400 mt-1">
           {doneCount}/{totalCount} 완료
         </div>
       </div>
 
-      {subPhase === 'ready' && groupLogs.length > 0 && (
-        <div className="flex-1 flex flex-col max-w-sm w-full mx-auto px-6 pb-8 items-center justify-center gap-8">
-          <div className="text-center space-y-4">
-            {isSuperset && <div className="text-xs font-black text-letusBlue">🔗 수퍼세트</div>}
-            {groupLogs.map(l => (
-              <div key={l.id}>
-                <div className="text-3xl font-black text-gray-800 mb-1">{l.exercise}</div>
-                <div className="text-sm font-bold text-gray-400">
-                  {l.targetSets}세트 x {l.targetReps}회 x {l.targetWeight}kg 목표
+      {subPhase === 'ready' && (
+        <div className="flex-1 flex flex-col max-w-sm w-full mx-auto px-5 pb-6 gap-4 min-h-0">
+          {/* 오늘 운동 전체 목록 — 누르면 시작할 운동이 바뀐다. 이미 끝낸 운동은 선택할 수 없다. 수퍼세트는 한 묶음으로 선택된다. */}
+          <div className="min-h-0 flex flex-col">
+            <div className="flex items-baseline justify-between mb-2 px-1">
+              <span className="text-m-body font-black text-gray-800">오늘 운동 목록</span>
+              <span className="text-m-caption font-bold text-gray-400">
+                {totalCount}개 중 {doneCount}개 완료
+              </span>
+            </div>
+            <div className="space-y-2 overflow-y-auto max-h-[42vh]">
+              {groups.map((ids, gi) => {
+                const rows = ids.map(id => logs.find(l => l.id === id)).filter(Boolean)
+                const groupDone = isGroupDone(gi)
+                const isSelectedGroup = gi === groupIdx && !groupDone
+                return (
+                  <button
+                    key={ids[0]}
+                    type="button"
+                    disabled={groupDone}
+                    onClick={() => setGroupIdx(gi)}
+                    aria-pressed={isSelectedGroup}
+                    className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${
+                      groupDone ? 'bg-gray-50 border-gray-100 cursor-not-allowed opacity-60' : isSelectedGroup ? 'bg-blue-50 border-letusBlue' : 'bg-white border-gray-200 active:bg-gray-50'
+                    }`}
+                  >
+                    {rows.length > 1 && (
+                      <div className="flex items-center gap-1 text-m-caption font-black text-letusBlue mb-1.5">
+                        <Link2 className="w-3.5 h-3.5" />
+                        수퍼세트
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      {rows.map(l => (
+                        <div key={l.id} className="flex items-center gap-3">
+                          <span
+                            className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-m-caption font-black ${
+                              l.isCompleted ? 'bg-green-100 text-green-600' : isSelectedGroup ? 'bg-letusBlue text-white' : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            {l.isCompleted ? <Check className="w-3.5 h-3.5" /> : sessionIds.indexOf(l.id) + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-m-body font-bold truncate ${l.isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>{l.exercise}</div>
+                            <div className="text-m-caption text-gray-400">
+                              {l.targetSets}세트 × {l.targetReps}회 × {l.targetWeight ? `${l.targetWeight}kg` : '맨몸'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {(groupDone || isSelectedGroup) && (
+                      <div className={`mt-1.5 text-right text-m-caption font-bold ${groupDone ? 'text-green-600' : 'text-letusBlue'}`}>{groupDone ? '완료' : '선택됨'}</div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {hasPendingGroup && groupLogs.length > 0 ? (
+            <>
+              {/* 시작할 운동 — 위 목록에서 고른 운동 */}
+              <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3.5 shadow-sm">
+                <div className="text-m-caption font-bold text-gray-400 mb-1.5">시작할 운동{isSuperset ? ' · 🔗 수퍼세트' : ''}</div>
+                <div className="space-y-2">
+                  {groupLogs.map(l => (
+                    <div key={l.id}>
+                      <div className="text-2xl font-black text-gray-800">{l.exercise}</div>
+                      <div className="text-m-body font-bold text-gray-400">
+                        {l.targetSets}세트 × {l.targetReps}회 × {l.targetWeight ? `${l.targetWeight}kg` : '맨몸'} 목표
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-          <button
-            onClick={() => startStep(0, null)}
-            className="w-full h-16 bg-letusBlue text-white font-black text-lg rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all"
-          >
-            시작하기
-          </button>
+              <button
+                onClick={() => startStep(0, null)}
+                className="w-full h-16 shrink-0 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all"
+              >
+                시작하기
+              </button>
+            </>
+          ) : (
+            <div className="text-center space-y-3 py-2">
+              <div className="text-m-body font-bold text-gray-500">오늘 운동을 모두 완료했어요.</div>
+              <button onClick={() => navigate(LOG_PATH)} className="w-full bg-letusBlue text-white font-black text-m-title py-4 rounded-2xl">
+                캘린더로 돌아가기
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {subPhase === 'active' && currentLog && setForm && (
         <div className="flex-1 flex flex-col max-w-sm w-full mx-auto px-6 pb-8">
           {isSuperset && (
-            <div className="text-xs font-black text-letusBlue text-center mb-1">
+            <div className="text-m-caption font-black text-letusBlue text-center mb-1">
               🔗 수퍼세트 {memberIdx + 1}/{groupLogs.length}
             </div>
           )}
-          <div className="text-xs font-bold text-gray-400 text-center mb-1">
+          <div className="text-m-caption font-bold text-gray-400 text-center mb-1">
             {currentStep.round + 1}/{currentLog.targetSets} 세트
           </div>
-          <div className="text-3xl font-black text-gray-800 text-center mt-1 mb-8">{currentLog.exercise}</div>
+          <div className="text-2xl font-black text-gray-800 text-center mt-1 mb-8">{currentLog.exercise}</div>
 
           <div className="space-y-4">
             <StepperCard label="반복" value={setForm.reps} step={1} onChange={v => setSetForm(f => ({ ...f, reps: v }))} />
@@ -313,7 +449,7 @@ export default function WorkoutSession() {
 
           <button
             onClick={completeSet}
-            className="w-full h-16 bg-letusBlue text-white font-black text-lg rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8"
+            className="w-full h-16 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8"
           >
             세트 완료
           </button>
@@ -322,23 +458,23 @@ export default function WorkoutSession() {
 
       {subPhase === 'rest' && (
         <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
-          <div className="text-xs font-bold text-gray-400 tracking-wide">{restPreview?.isNewGroup ? '휴식 중' : '세트 휴식'}</div>
-          <div className="text-7xl font-black text-letusBlue tabular-nums">
+          <div className="text-m-caption font-bold text-gray-400 tracking-wide">{restPreview?.isNewGroup ? '휴식 중' : '세트 휴식'}</div>
+          <div className="text-6xl font-black text-letusBlue tabular-nums">
             {mm}:{ss}
           </div>
           <div className="flex gap-3">
-            <button onClick={() => adjustRest(-15)} className="px-5 py-2.5 rounded-xl border border-gray-300 text-sm font-bold text-gray-600 hover:bg-gray-50">
+            <button onClick={() => adjustRest(-15)} className="px-5 py-2.5 rounded-xl border border-gray-300 text-m-body font-bold text-gray-600 hover:bg-gray-50">
               −15초
             </button>
-            <button onClick={() => adjustRest(15)} className="px-5 py-2.5 rounded-xl border border-gray-300 text-sm font-bold text-gray-600 hover:bg-gray-50">
+            <button onClick={() => adjustRest(15)} className="px-5 py-2.5 rounded-xl border border-gray-300 text-m-body font-bold text-gray-600 hover:bg-gray-50">
               +15초
             </button>
           </div>
-          <button onClick={finishRest} className="text-letusBlue font-bold text-sm underline underline-offset-2 mt-2">
+          <button onClick={finishRest} className="text-letusBlue font-bold text-m-body underline underline-offset-2 mt-2 px-4 py-3">
             건너뛰기
           </button>
           {restPreview && (
-            <div className="text-xs text-gray-400 mt-6">
+            <div className="text-m-caption text-gray-400 mt-6">
               {restPreview.isNewGroup
                 ? `다음 운동: ${restPreview.exercise}`
                 : `다음: ${restPreview.exercise} ${restPreview.round + 1}/${restPreview.targetSets}세트`}
@@ -351,12 +487,12 @@ export default function WorkoutSession() {
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
           <div className="text-5xl">🎉</div>
           <div className="text-xl font-black text-gray-800">오늘 루틴 완료!</div>
-          <div className="text-xs text-gray-400">{routine.name}</div>
+          <div className="text-m-caption text-gray-400">{routine.name}</div>
 
           {progressionNotes.length > 0 && (
             <div className="w-full max-w-sm space-y-1.5 mt-4 text-left">
               {progressionNotes.map((n, i) => (
-                <div key={i} className="flex items-center justify-between text-xs font-bold bg-white rounded-lg px-3 py-2.5 border border-gray-100">
+                <div key={i} className="flex items-center justify-between text-m-caption font-bold bg-white rounded-lg px-3 py-2.5 border border-gray-100">
                   <span className="text-gray-700">{n.exercise}</span>
                   <span className={n.progressed ? 'text-letusBlue' : 'text-gray-400'}>
                     {n.progressed ? (n.kind === 'reps' ? `다음엔 +${n.delta}회 ↑` : `다음엔 +${n.delta}kg ↑`) : '다음엔 동일 유지'}
@@ -367,8 +503,8 @@ export default function WorkoutSession() {
           )}
 
           <button
-            onClick={() => navigate('/workout/log')}
-            className="mt-6 w-full max-w-sm bg-letusBlue text-white font-black text-base py-4 rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition-colors"
+            onClick={() => navigate(LOG_PATH)}
+            className="mt-6 w-full max-w-sm bg-letusBlue text-white font-black text-m-title py-4 rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition-colors"
           >
             캘린더로 돌아가기
           </button>

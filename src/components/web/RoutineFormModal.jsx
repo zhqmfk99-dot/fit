@@ -2,7 +2,7 @@
 import { GripVertical } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
-import { buildTagIndex, matchesQuery, aliasMatch } from './exerciseSearch.js'
+import { buildTagIndex, matchesQuery, aliasMatch } from '../../lib/exerciseSearch.js'
 
 const ACCENT = 'bg-letusOrange'
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']

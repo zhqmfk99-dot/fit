@@ -1,5 +1,5 @@
 ﻿import { MUSCLE_LABELS } from '../../lib/muscleMap.js'
-import { equipmentBadgeClass } from './equipmentStyle.js'
+import { equipmentBadgeClass } from '../../lib/equipmentStyle.js'
 
 export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) {
   if (!row) return null

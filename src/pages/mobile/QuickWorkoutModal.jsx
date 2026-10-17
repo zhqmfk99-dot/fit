@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Plus, GripVertical } from 'lucide-react'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
+import { buildTagIndex, matchesQuery, aliasMatch } from '../../lib/exerciseSearch.js'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 
 const ACCENT = 'bg-letusBlue'
@@ -28,7 +29,10 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
 
   const { exercises: exerciseCatalog } = useWorkoutLogs()
   const knownExercises = useMemo(() => getKnownExerciseNames(routines, exerciseCatalog), [routines, exerciseCatalog])
-  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => n.toLowerCase().includes(query.toLowerCase())) : knownExercises)
+  // 이름뿐 아니라 태그(별칭)로도 찾는다. 선택하면 정식 명칭이 입력된다.
+  const tagsByName = useMemo(() => buildTagIndex(exerciseCatalog), [exerciseCatalog])
+  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => matchesQuery(n, tagsByName.get(n), query)) : knownExercises)
+  const aliasHint = (n, query) => aliasMatch(n, tagsByName.get(n), query)
 
   const addExercise = () => setExercises(prev => [...prev, emptyExercise()])
   const removeExercise = idx => setExercises(prev => prev.filter((_, i) => i !== idx))
@@ -79,11 +83,11 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-[100] backdrop-blur-sm fade-in">
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-[420px] overflow-hidden flex flex-col slide-up">
         <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-white">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center">
+          <h3 className="text-m-body font-bold text-gray-800 flex items-center">
             <span className={`w-1.5 h-3.5 ${ACCENT} rounded-full mr-2`}></span>
             오늘 운동 등록
           </h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
+          <button type="button" onClick={onClose} className="w-9 h-9 flex items-center justify-center text-gray-400 active:text-gray-600 transition-colors">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -98,7 +102,7 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex-1 text-xs font-bold py-2.5 border-b-2 transition-colors ${
+              className={`flex-1 text-m-caption font-bold py-3 border-b-2 transition-colors ${
                 tab === t.id ? 'border-letusBlue text-letusBlue' : 'border-transparent text-gray-400 hover:text-gray-600'
               }`}
             >
@@ -109,7 +113,7 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
 
         <div className="p-5 bg-slate-50 flex-1 overflow-y-auto max-h-[70vh] space-y-4">
           {errorMsg && (
-            <div className="bg-red-50 text-red-600 text-xs font-bold p-3 rounded border border-red-100">{errorMsg}</div>
+            <div className="bg-red-50 text-red-600 text-m-caption font-bold p-3 rounded border border-red-100">{errorMsg}</div>
           )}
 
           {tab === 'routine' &&
@@ -119,20 +123,20 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
                   <button
                     key={r.id}
                     onClick={() => onStartRoutine(r)}
-                    className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 hover:border-letusBlue transition-colors text-left"
+                    className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3.5 py-3 active:border-letusBlue transition-colors text-left"
                   >
-                    <span className="text-xs font-bold text-gray-700">{r.name}</span>
-                    <span className="text-xs text-gray-400 font-bold">{r.exercises.length}개 운동 · 바로 시작</span>
+                    <span className="text-m-caption font-bold text-gray-700">{r.name}</span>
+                    <span className="text-m-caption text-gray-400 font-bold">{r.exercises.length}개 운동 · 바로 시작</span>
                   </button>
                 ))}
               </div>
             ) : (
-              <div className="text-center text-xs text-gray-400 font-bold py-8">등록된 루틴이 없습니다.</div>
+              <div className="text-center text-m-caption text-gray-400 font-bold py-8">등록된 루틴이 없습니다.</div>
             ))}
 
           {tab === 'custom' && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-gray-700">운동 목록</label>
+              <label className="text-m-caption font-bold text-gray-700">운동 목록</label>
               <div className="space-y-2">
                 {exercises.map((ex, idx) => {
                   const isGrouped = !!ex.linkedToNext || (idx > 0 && !!exercises[idx - 1].linkedToNext)
@@ -163,7 +167,7 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
                             onFocus={() => setDropdownIdx(idx)}
                             onBlur={() => setTimeout(() => setDropdownIdx(prev => (prev === idx ? null : prev)), 150)}
                             placeholder="운동명"
-                            className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusBlue"
+                            className="w-full border border-gray-200 rounded-lg px-2 py-2.5 text-m-body focus:outline-none focus:border-letusBlue"
                           />
                           {dropdownIdx === idx && suggestionsFor(ex.exercise).length > 0 && (
                             <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-white border border-blue-200 rounded-lg shadow-lg overflow-y-auto max-h-[160px]">
@@ -174,9 +178,10 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
                                     updateExercise(idx, 'exercise', nameOption)
                                     setDropdownIdx(null)
                                   }}
-                                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 border-b border-gray-50 last:border-0"
+                                  className="w-full text-left px-3 py-2 text-m-body text-gray-700 hover:bg-blue-50 border-b border-gray-50 last:border-0"
                                 >
                                   {renderHighlight(nameOption, ex.exercise)}
+                                  {aliasHint(nameOption, ex.exercise) && <span className="ml-1.5 text-m-caption text-gray-400">({aliasHint(nameOption, ex.exercise)})</span>}
                                 </button>
                               ))}
                             </div>
@@ -184,7 +189,7 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
                         </div>
                         <button
                           onClick={() => removeExercise(idx)}
-                          className="shrink-0 text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center p-1"
+                          className="shrink-0 w-9 h-9 text-gray-400 active:text-red-500 transition-colors flex items-center justify-center"
                           title="운동 삭제"
                         >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -194,37 +199,37 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
                       </div>
                       <div className="grid grid-cols-4 gap-1.5">
                         <input
-                          type="number"
+                          type="number" inputMode="decimal"
                           value={ex.sets}
                           onChange={e => updateExercise(idx, 'sets', e.target.value)}
                           placeholder="세트"
-                          className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusBlue"
+                          className="min-w-0 border border-gray-200 rounded-lg px-2 py-2.5 text-m-body focus:outline-none focus:border-letusBlue"
                         />
                         <input
-                          type="number"
+                          type="number" inputMode="decimal"
                           value={ex.reps}
                           onChange={e => updateExercise(idx, 'reps', e.target.value)}
                           placeholder="반복"
-                          className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusBlue"
+                          className="min-w-0 border border-gray-200 rounded-lg px-2 py-2.5 text-m-body focus:outline-none focus:border-letusBlue"
                         />
                         <input
-                          type="number"
+                          type="number" inputMode="decimal"
                           value={ex.weight}
                           onChange={e => updateExercise(idx, 'weight', e.target.value)}
                           placeholder="kg"
-                          className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusBlue"
+                          className="min-w-0 border border-gray-200 rounded-lg px-2 py-2.5 text-m-body focus:outline-none focus:border-letusBlue"
                         />
                         <input
-                          type="number"
+                          type="number" inputMode="decimal"
                           value={ex.restSeconds}
                           onChange={e => updateExercise(idx, 'restSeconds', e.target.value)}
                           placeholder="휴식(초)"
                           title="세트간 휴식시간(초), 기본 90초"
-                          className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-letusBlue"
+                          className="min-w-0 border border-gray-200 rounded-lg px-2 py-2.5 text-m-body focus:outline-none focus:border-letusBlue"
                         />
                       </div>
                       {idx < exercises.length - 1 && (
-                        <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 cursor-pointer">
+                        <label className="flex items-center gap-1.5 text-m-caption font-bold text-gray-500 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={!!ex.linkedToNext}
@@ -238,7 +243,7 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
                   </div>
                 )})}
               </div>
-              <button onClick={addExercise} className="flex items-center gap-1 text-sm font-bold text-letusBlue hover:opacity-70 transition-opacity self-start">
+              <button onClick={addExercise} className="flex items-center gap-1 text-m-body font-bold text-letusBlue hover:opacity-70 transition-opacity self-start">
                 <Plus className="w-4 h-4" />
                 운동 추가
               </button>
@@ -248,7 +253,7 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
 
         {tab === 'custom' && (
           <div className="p-4 border-t border-gray-200 bg-white">
-            <button onClick={handleStart} className="w-full px-4 py-3 bg-letusBlue text-white text-sm font-bold rounded-lg hover:bg-blue-600 transition-colors">
+            <button onClick={handleStart} className="w-full px-4 py-3 bg-letusBlue text-white text-m-body font-bold rounded-lg hover:bg-blue-600 transition-colors">
               등록 후 시작
             </button>
           </div>

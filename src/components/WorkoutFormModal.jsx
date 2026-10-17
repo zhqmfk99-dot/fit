@@ -3,6 +3,7 @@ import DateInput from './DateInput.jsx'
 import { setCount, avgReps, avgWeight } from '../lib/workoutMetrics.js'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { getKnownExerciseNames } from '../lib/muscleMap.js'
+import { buildTagIndex, matchesQuery, aliasMatch } from '../lib/exerciseSearch.js'
 
 const ACCENT = 'bg-letusOrange'
 
@@ -23,7 +24,10 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
   const isEdit = !!row
   const { routines, exercises: exerciseCatalog } = useWorkoutLogs()
   const knownExercises = useMemo(() => getKnownExerciseNames(routines, exerciseCatalog), [routines, exerciseCatalog])
-  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => n.toLowerCase().includes(query.toLowerCase())) : knownExercises)
+  // 이름뿐 아니라 태그(별칭)로도 찾는다. 선택하면 정식 명칭이 입력된다.
+  const tagsByName = useMemo(() => buildTagIndex(exerciseCatalog), [exerciseCatalog])
+  const suggestionsFor = query => (query.trim() ? knownExercises.filter(n => matchesQuery(n, tagsByName.get(n), query)) : knownExercises)
+  const aliasHint = (n, query) => aliasMatch(n, tagsByName.get(n), query)
 
   const [form, setForm] = useState({
     date: row?.date || initialDate || '',
@@ -65,7 +69,7 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] backdrop-blur-sm p-4 fade-in">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[420px] overflow-hidden flex flex-col slide-up">
         <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-white">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center">
+          <h3 className="text-m-body font-bold text-gray-800 flex items-center">
             <span className={`w-1.5 h-3.5 ${ACCENT} rounded-full mr-2`}></span>
             {isEdit ? '운동 기록 수정' : '운동 기록 등록'}
           </h3>
@@ -78,7 +82,7 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
 
         <div className="p-6 bg-slate-50 flex-1 overflow-y-auto max-h-[70vh] space-y-4">
           {errorMsg && (
-            <div className="bg-red-50 text-red-600 text-sm font-bold p-3 rounded border border-red-100 flex items-center gap-1.5">
+            <div className="bg-red-50 text-red-600 text-m-body font-bold p-3 rounded border border-red-100 flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -92,14 +96,14 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
           )}
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-bold text-gray-700">
+            <label className="text-m-body font-bold text-gray-700">
               날짜 <span className="text-red-500">*</span>
             </label>
             <DateInput value={form.date} onChange={v => set('date', v)} fullWidth />
           </div>
 
           <div className="flex flex-col gap-1.5 relative">
-            <label className="text-sm font-bold text-gray-700">
+            <label className="text-m-body font-bold text-gray-700">
               운동명 <span className="text-red-500">*</span>
             </label>
             <input
@@ -107,7 +111,7 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
               onChange={e => set('exercise', e.target.value)}
               onFocus={() => setShowDropdown(true)}
               onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-              className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-sm focus:outline-none focus:border-letusOrange transition-all bg-white"
+              className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-m-body focus:outline-none focus:border-letusOrange transition-all bg-white"
             />
             {showDropdown && suggestionsFor(form.exercise).length > 0 && (
               <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-white border border-orange-200 rounded-lg shadow-lg overflow-y-auto max-h-[160px]">
@@ -118,9 +122,10 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
                       set('exercise', nameOption)
                       setShowDropdown(false)
                     }}
-                    className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-orange-50 border-b border-gray-50 last:border-0"
+                    className="w-full text-left px-3.5 py-2 text-m-body text-gray-700 hover:bg-orange-50 border-b border-gray-50 last:border-0"
                   >
                     {renderHighlight(nameOption, form.exercise)}
+                    {aliasHint(nameOption, form.exercise) && <span className="ml-1.5 text-m-caption text-gray-400">({aliasHint(nameOption, form.exercise)})</span>}
                   </button>
                 ))}
               </div>
@@ -129,39 +134,39 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-bold text-gray-700">세트</label>
+              <label className="text-m-body font-bold text-gray-700">세트</label>
               <input
                 type="number"
                 value={form.sets}
                 onChange={e => set('sets', e.target.value)}
-                className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-sm focus:outline-none focus:border-letusOrange transition-all bg-white"
+                className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-m-body focus:outline-none focus:border-letusOrange transition-all bg-white"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-bold text-gray-700">반복</label>
+              <label className="text-m-body font-bold text-gray-700">반복</label>
               <input
                 type="number"
                 value={form.reps}
                 onChange={e => set('reps', e.target.value)}
-                className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-sm focus:outline-none focus:border-letusOrange transition-all bg-white"
+                className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-m-body focus:outline-none focus:border-letusOrange transition-all bg-white"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-bold text-gray-700">중량(kg)</label>
+              <label className="text-m-body font-bold text-gray-700">중량(kg)</label>
               <input
                 type="number"
                 value={form.weight}
                 onChange={e => set('weight', e.target.value)}
-                className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-sm focus:outline-none focus:border-letusOrange transition-all bg-white"
+                className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-m-body focus:outline-none focus:border-letusOrange transition-all bg-white"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-bold text-gray-700">피로도(1-5)</label>
+              <label className="text-m-body font-bold text-gray-700">피로도(1-5)</label>
               <input
                 type="number"
                 value={form.fatigue}
                 onChange={e => set('fatigue', e.target.value)}
-                className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-sm focus:outline-none focus:border-letusOrange transition-all bg-white"
+                className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-m-body focus:outline-none focus:border-letusOrange transition-all bg-white"
               />
             </div>
           </div>
@@ -171,13 +176,13 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-[9px] border border-gray-300 text-gray-600 text-sm font-bold rounded-[3px] hover:bg-gray-50 transition-colors"
+            className="px-5 py-2.5 border border-gray-300 text-gray-600 text-m-body font-bold rounded-[3px] hover:bg-gray-50 transition-colors"
           >
             취소
           </button>
           <button
             onClick={handleSave}
-            className="px-5 py-[9px] bg-letusBlue text-white text-sm font-bold rounded-[3px] hover:bg-blue-600 transition-colors"
+            className="px-5 py-2.5 bg-letusBlue text-white text-m-body font-bold rounded-[3px] hover:bg-blue-600 transition-colors"
           >
             저장
           </button>

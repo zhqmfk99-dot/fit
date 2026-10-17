@@ -41,7 +41,27 @@ React + Vite + Tailwind, 데이터/인증은 Supabase, 배포는 Vercel.
 
 - 적용 완료: 웹앱 **기록**, **루틴**, **운동 리스트** 화면 본문, 웹앱 **모달 전부**(`components/web/*`, `BodyRecordModal`). 대시보드는 사용자가 현재 크기로 확정(변경 금지).
 - 미적용(요청 시 순차 적용): 로그인/재설정 화면, 사이드바·헤더.
-- PWA(모바일) 화면은 이 표준과 별개로 따로 정한다.
+- PWA(모바일) 화면은 이 표준과 별개로 따로 정한다(아래 "PWA 글자 크기 표준").
+
+## PWA 글자 크기 표준
+PWA(모바일) 화면은 터치 화면이라 웹앱보다 크게 잡은 별도 토큰을 쓴다. 새 화면·수정 시 `text-xs/sm/lg` 대신 아래를 쓴다. 터치 대상(버튼·탭)은 높이 32px 이상을 목표로 한다.
+
+| 토큰 | 크기 | 용도 |
+|---|---|---|
+| `text-m-title` | 15px | 카드·섹션 제목, 숫자 강조 |
+| `text-m-body` | 13px | 본문, 버튼, 입력 |
+| `text-m-caption` | 11px | 보조 설명, 뱃지, 범례, 축 라벨 |
+
+차트의 축·범례 글자는 토큰이 아니라 코드에 직접 11px로 지정되어 있다(`fontSize: 11`). 토큰 크기를 바꾸면 차트 글자도 함께 확인한다. (처음 16/14/12px로 만들었다가 사용자가 크다고 해서 줄였다.)
+
+- 모바일 전용 컴포넌트는 `components/mobile/` 폴더에 둔다(현재: `StatCard`, `MuscleFatigueMap`, `BodyTrendChart`). PWA 화면은 이 복사본을 쓰고, 웹앱은 `components/`·`components/web/`을 쓴다.
+- **적용 완료(PWA 전체)**: 대시보드(부위 선택 색상, 신체 추이 그래프), 운동 리스트(검색·동작 패턴·운동 유형 필터, 뱃지·태그), 루틴(운동 구성 요약), 기록(신체 기록 입력, 하단 고정 버튼 바, 날짜별 신체 기록 요약), 메인 메뉴(오늘 상태가 보이는 운동하기 카드, 2열 메뉴), 운동 진행, 즉석 운동 모달, 상단 `PageHeader`, 그리고 모달 전부.
+- **PWA 전용이 된 `components/` 원본**: `ExerciseFormModal`, `ExerciseDetailModal`, `RoutineFormModal`, `RoutineDetailModal`, `WorkoutFormModal`, `RescheduleModal`, `ProfileModal`, `DateInput`(기기 기본 날짜 선택기 `<input type="date">`), `PageHeader`(md 미만에서만 보임). 웹앱은 `components/web/` 복사본을 쓴다.
+- 운동 진행 화면의 큰 글자(운동명·숫자 `text-2xl`, 휴식 타이머 `text-6xl`)는 멀리서 보는 용도라 토큰이 아닌 Tailwind 기본 크기를 쓴다.
+- 운동 진행 화면의 시작 전 화면: 위에 오늘 운동 **전체 목록**(세트×횟수×무게, 수퍼세트는 한 묶음), 아래에 **시작할 운동** 패널과 시작 버튼. 목록에서 누르면 시작할 운동이 바뀌고, 이미 끝낸 운동은 선택할 수 없다. 운동 하나가 끝나면 남은 그룹 중 현재 다음(뒤 → 앞 순)이 자동 선택되고, 전부 끝나면 완료 화면. 목록은 세션 시작 시점의 전체 운동으로 고정하고(`groups`), 실제 진행은 시작 시점에 안 끝난 운동만 한다(`initiallyDone`).
+- 운동 진행 화면의 동작: 종료·완료 후 돌아가는 곳은 `/mobile/log`(데스크탑 경로 `/workout/log`로 가면 헤더 없는 데스크탑 화면이 열린다), 휴식 타이머는 종료 시각 기준으로 계산(화면이 꺼져도 정확), 운동 중 화면 꺼짐 방지(Wake Lock, 지원 브라우저만), 세트·휴식 중 종료는 확인창.
+- **웹앱·PWA가 같이 쓰는 로직(UI 아님)**: `lib/exerciseSearch.js`(운동명·태그 검색 규칙), `lib/equipmentStyle.js`(장비별 뱃지 색). 검색 규칙을 바꾸면 양쪽에 모두 반영된다.
+- 모바일 검증은 개발 서버에서 폭 375px로 한다(가로 넘침 없음, 터치 대상 높이 32px 이상).
 
 ## 데이터 / 인증
 - Supabase 클라이언트: `src/lib/supabase.js` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`는 `.env.local`, Vercel 환경변수).

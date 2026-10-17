@@ -95,7 +95,7 @@ export default function BodyRecordModal({ initialDate, onClose }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[460px] max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center p-5 border-b border-gray-100">
-          <h3 className="font-black text-gray-800">신체 기록</h3>
+          <h3 className="text-ui-title font-black text-gray-800">신체 기록</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>

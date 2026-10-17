@@ -2,8 +2,8 @@
 import PageHeader from '../components/PageHeader.jsx'
 import ExerciseFormModal from '../components/web/ExerciseFormModal.jsx'
 import ExerciseDetailModal from '../components/web/ExerciseDetailModal.jsx'
-import { equipmentBadgeClass } from '../components/web/equipmentStyle.js'
-import { matchesQuery } from '../components/web/exerciseSearch.js'
+import { equipmentBadgeClass } from '../lib/equipmentStyle.js'
+import { matchesQuery } from '../lib/exerciseSearch.js'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { MUSCLE_LABELS, UPPER_BODY_MUSCLES, LOWER_BODY_MUSCLES, EQUIPMENT_OPTIONS, MOVEMENT_PATTERNS, EXERCISE_TYPES } from '../lib/muscleMap.js'
 

@@ -4,6 +4,9 @@ import RoutineFormModal from '../../components/RoutineFormModal.jsx'
 import RoutineDetailModal from '../../components/RoutineDetailModal.jsx'
 import { useRoutineManager } from '../../hooks/useRoutineManager.js'
 
+// "스쿼트 5×5 80kg" 형태로 한 운동을 요약
+const summarizeExercise = ex => `${ex.exercise} ${ex.sets}×${ex.reps}${Number(ex.weight) ? ` ${ex.weight}kg` : ''}`
+
 export default function MobileRoutines() {
   const {
     routines,
@@ -30,7 +33,7 @@ export default function MobileRoutines() {
       <PageHeader title="루틴" color="bg-letusOrange" />
       <div className="p-4 space-y-3">
         {routines.length === 0 ? (
-          <div className="py-16 text-center text-sm text-gray-400 font-bold">등록된 루틴이 없습니다.</div>
+          <div className="py-16 text-center text-m-body text-gray-400 font-bold">등록된 루틴이 없습니다.</div>
         ) : (
           <div className="space-y-2">
             {routines.map(r => {
@@ -53,12 +56,12 @@ export default function MobileRoutines() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pr-7">
-                    <span className="font-bold text-gray-800 text-sm truncate">{r.name}</span>
+                  <div className="flex items-center justify-between gap-2 pr-8">
+                    <span className="font-bold text-gray-800 text-m-body truncate">{r.name}</span>
                     {!editMode && (
                       <span
                         onClick={e => toggleActive(e, r.id)}
-                        className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded cursor-pointer ${
+                        className={`shrink-0 text-m-caption font-bold px-3 py-2 rounded-lg cursor-pointer ${
                           r.isActive ? 'bg-blue-50 text-letusBlue' : 'bg-gray-100 text-gray-400'
                         }`}
                       >
@@ -66,20 +69,21 @@ export default function MobileRoutines() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-gray-400 font-bold">
+                  <div className="text-m-caption text-gray-400 font-bold">
                     {r.repeatDays?.length ? r.repeatDays.join(', ') : '요일 미지정'} · {r.exercises.length}개 운동
                   </div>
+                  {r.exercises.length > 0 && <div className="text-m-caption text-gray-500 truncate">{r.exercises.map(summarizeExercise).join(' · ')}</div>}
                 </div>
               )
             })}
           </div>
         )}
 
-        <div className="pt-1 text-xs font-bold text-gray-400">총 {routines.length}건</div>
+        <div className="pt-1 text-m-caption font-bold text-gray-400">총 {routines.length}건</div>
 
         <button
           onClick={openCreate}
-          className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-3 text-sm font-bold text-gray-400 active:border-letusBlue active:text-letusBlue transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-3 text-m-body font-bold text-gray-400 active:border-letusBlue active:text-letusBlue transition-colors"
         >
           <Plus className="w-4 h-4" />
           루틴 추가
@@ -88,7 +92,7 @@ export default function MobileRoutines() {
         {!editMode ? (
           <button
             onClick={enterEditMode}
-            className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-red-300 rounded-lg py-3 text-sm font-bold text-red-400 active:border-red-500 active:text-red-600 transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-red-300 rounded-lg py-3 text-m-body font-bold text-red-400 active:border-red-500 active:text-red-600 transition-colors"
           >
             <Pencil className="w-4 h-4" />
             수정
@@ -97,14 +101,14 @@ export default function MobileRoutines() {
           <div className="flex gap-2">
             <button
               onClick={exitEditMode}
-              className="flex-1 border-2 border-dashed border-gray-300 rounded-lg py-3 text-sm font-bold text-gray-400 active:border-gray-400 transition-colors"
+              className="flex-1 border-2 border-dashed border-gray-300 rounded-lg py-3 text-m-body font-bold text-gray-400 active:border-gray-400 transition-colors"
             >
               취소
             </button>
             <button
               onClick={confirmEdit}
               disabled={!selectedId}
-              className={`flex-1 rounded-lg py-3 text-sm font-bold transition-colors ${
+              className={`flex-1 rounded-lg py-3 text-m-body font-bold transition-colors ${
                 selectedId ? 'bg-red-500 text-white active:bg-red-600' : 'bg-gray-100 text-gray-300 cursor-not-allowed'
               }`}
             >

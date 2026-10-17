@@ -3,13 +3,13 @@ import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth, MIN_PASSWORD_LENGTH } from '../context/AuthContext.jsx'
 
-const inputClass = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-letusBlue'
-const readOnlyClass = 'w-full border border-gray-100 bg-gray-50 text-gray-500 rounded-lg px-3 py-2 text-sm'
+const inputClass = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-m-body outline-none focus:border-letusBlue'
+const readOnlyClass = 'w-full border border-gray-100 bg-gray-50 text-gray-500 rounded-lg px-3 py-2 text-m-body'
 
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-[11px] font-bold text-gray-500 mb-1">{label}</span>
+      <span className="block text-m-body font-bold text-gray-500 mb-1">{label}</span>
       {children}
     </label>
   )
@@ -107,7 +107,7 @@ export default function ProfileModal({ onClose }) {
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[420px] max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center p-5 border-b border-gray-100">
-          <h3 className="font-black text-gray-800">내 정보</h3>
+          <h3 className="text-m-title font-black text-gray-800">내 정보</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
@@ -115,7 +115,7 @@ export default function ProfileModal({ onClose }) {
 
         <div className="p-5 space-y-3 overflow-y-auto">
           {loading ? (
-            <p className="text-sm font-bold text-gray-400 text-center py-8">불러오는 중...</p>
+            <p className="text-m-body font-bold text-gray-400 text-center py-8">불러오는 중...</p>
           ) : (
             <>
               <Field label="아이디">
@@ -155,16 +155,16 @@ export default function ProfileModal({ onClose }) {
               <Field label="BMI (키·몸무게로 자동 계산)">
                 <input type="text" value={bmi || '-'} readOnly className={readOnlyClass} />
               </Field>
-              {message && <p className="text-xs font-bold text-red-500">{message}</p>}
+              {message && <p className="text-m-caption font-bold text-red-500">{message}</p>}
             </>
           )}
         </div>
 
         <div className="p-5 border-t border-gray-100 flex items-center justify-between">
-          <button onClick={handleWithdraw} disabled={busy || loading} className="text-xs font-bold text-gray-400 hover:text-red-500 disabled:opacity-60">
+          <button onClick={handleWithdraw} disabled={busy || loading} className="text-m-caption font-bold text-gray-400 hover:text-red-500 disabled:opacity-60">
             회원 탈퇴
           </button>
-          <button onClick={handleSave} disabled={busy || loading} className="bg-letusBlue text-white text-sm font-black rounded-lg px-6 py-2 disabled:opacity-60">
+          <button onClick={handleSave} disabled={busy || loading} className="bg-letusBlue text-white text-m-body font-black rounded-lg px-6 py-2 disabled:opacity-60">
             {busy ? '저장 중...' : '저장'}
           </button>
         </div>

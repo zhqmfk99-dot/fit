@@ -1,4 +1,5 @@
 import { MUSCLE_LABELS } from '../lib/muscleMap.js'
+import { equipmentBadgeClass } from '../lib/equipmentStyle.js'
 
 export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) {
   if (!row) return null
@@ -7,7 +8,7 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] backdrop-blur-sm p-4 fade-in">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[400px] overflow-hidden flex flex-col slide-up">
         <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-white">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center">
+          <h3 className="text-m-body font-bold text-gray-800 flex items-center">
             <span className="w-1.5 h-3.5 bg-letusOrange rounded-full mr-2"></span>
             운동 상세
           </h3>
@@ -20,15 +21,15 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
 
         <div className="p-5 bg-slate-50 flex-1 overflow-y-auto max-h-[70vh] space-y-4">
           <div>
-            <label className="block text-sm font-bold text-gray-600 mb-1">운동명</label>
-            <div className="text-base font-black text-gray-800">{row.name}</div>
+            <label className="block text-m-body font-bold text-gray-600 mb-1">운동명</label>
+            <div className="text-m-title font-black text-gray-800">{row.name}</div>
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-600 mb-1.5">부위</label>
+            <label className="block text-m-body font-bold text-gray-600 mb-1.5">부위</label>
             <div className="flex flex-wrap gap-1.5">
               {row.muscles.map(m => (
-                <span key={m} className="px-3 py-1.5 rounded-full text-sm font-bold bg-orange-50 text-letusOrange">
+                <span key={m} className="px-3 py-1.5 rounded-full text-m-body font-bold bg-orange-50 text-letusOrange">
                   {MUSCLE_LABELS[m] || m}
                 </span>
               ))}
@@ -36,8 +37,34 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-600 mb-1.5">사용장비</label>
-            <span className="px-3 py-1.5 rounded-full text-sm font-bold bg-blue-50 text-letusBlue">{row.equipment || '-'}</span>
+            <label className="block text-m-body font-bold text-gray-600 mb-1.5">사용장비</label>
+            <span className={`px-3 py-1.5 rounded-full text-m-body font-bold ${row.equipment ? equipmentBadgeClass(row.equipment) : 'bg-gray-100 text-gray-500'}`}>{row.equipment || '-'}</span>
+          </div>
+
+          <div className="flex gap-6">
+            <div>
+              <label className="block text-m-body font-bold text-gray-600 mb-1.5">동작 패턴</label>
+              <span className="px-3 py-1.5 rounded-full text-m-body font-bold bg-violet-50 text-violet-600">{row.movementPattern || '-'}</span>
+            </div>
+            <div>
+              <label className="block text-m-body font-bold text-gray-600 mb-1.5">운동 유형</label>
+              <span className="px-3 py-1.5 rounded-full text-m-body font-bold bg-gray-100 text-gray-600">{row.exerciseType || '-'}</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-m-body font-bold text-gray-600 mb-1.5">태그</label>
+            {row.tags?.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {row.tags.map(tag => (
+                  <span key={tag} className="px-2.5 py-1 rounded-full text-m-caption font-bold bg-slate-100 text-slate-600">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-m-body text-gray-400">-</span>
+            )}
           </div>
         </div>
 
@@ -46,7 +73,7 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
             <button
               type="button"
               onClick={() => onDelete(row)}
-              className="px-4 py-[9px] text-red-500 text-sm font-bold rounded-[3px] hover:bg-red-50 transition-colors"
+              className="px-4 py-2.5 text-red-500 text-m-body font-bold rounded-[3px] hover:bg-red-50 transition-colors"
             >
               삭제
             </button>
@@ -55,7 +82,7 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-[9px] border border-gray-300 text-gray-600 text-sm font-bold rounded-[3px] hover:bg-gray-50 transition-colors"
+              className="px-5 py-2.5 border border-gray-300 text-gray-600 text-m-body font-bold rounded-[3px] hover:bg-gray-50 transition-colors"
             >
               닫기
             </button>
@@ -65,7 +92,7 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
                   onClose()
                   onEdit(row)
                 }}
-                className="px-5 py-[9px] bg-letusBlue text-white text-sm font-bold rounded-[3px] hover:bg-blue-600 transition-colors"
+                className="px-5 py-2.5 bg-letusBlue text-white text-m-body font-bold rounded-[3px] hover:bg-blue-600 transition-colors"
               >
                 수정하기
               </button>

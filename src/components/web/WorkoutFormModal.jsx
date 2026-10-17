@@ -3,7 +3,7 @@ import DateInput from './DateInput.jsx'
 import { setCount, avgReps, avgWeight } from '../../lib/workoutMetrics.js'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
-import { buildTagIndex, matchesQuery, aliasMatch } from './exerciseSearch.js'
+import { buildTagIndex, matchesQuery, aliasMatch } from '../../lib/exerciseSearch.js'
 
 const ACCENT = 'bg-letusOrange'
 
