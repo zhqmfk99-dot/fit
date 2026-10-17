@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { generateScheduledLogs } from '../lib/scheduleGenerator.js'
+import { applyKcal } from '../lib/calories.js'
+import { useAuth } from './AuthContext.jsx'
 
 const WorkoutLogsContext = createContext(null)
 
@@ -40,6 +42,7 @@ const logFromRow = r => ({
   performedSets: r.performed_sets ?? [],
   fatigue: r.fatigue,
   isCompleted: r.is_completed,
+  kcal: r.kcal == null ? null : Number(r.kcal), // 소모 칼로리(추정) — 완료·수정 시 앱이 계산해서 저장 (lib/calories.js)
 })
 const logToRow = l => ({
   id: l.id,
@@ -54,6 +57,7 @@ const logToRow = l => ({
   performed_sets: l.performedSets ?? [],
   fatigue: l.fatigue ?? null,
   is_completed: !!l.isCompleted,
+  kcal: l.kcal ?? null,
 })
 
 const num = v => (v == null ? null : Number(v))
@@ -107,20 +111,22 @@ async function persistDiff(table, prev, next, toRow) {
 
 // useState처럼 쓸 수 있는(값 또는 함수형 업데이트) setter를 만들되, 변경분을 Supabase에 비동기로 저장한다.
 // 같은 핸들러 안에서 setter를 연달아 불러도 최신 값을 보도록 ref에 동기적으로 반영한다.
-function usePersistedState(table, toRow, queueRef, onError) {
+// transform(next, prev): 저장 직전에 값을 다듬는 선택 함수 (운동 기록에 소모 칼로리를 채울 때 쓴다)
+function usePersistedState(table, toRow, queueRef, onError, transform) {
   const [state, setState] = useState([])
   const ref = useRef([])
 
   const set = useCallback(
     updater => {
       const prev = ref.current
-      const next = typeof updater === 'function' ? updater(prev) : updater
+      const raw = typeof updater === 'function' ? updater(prev) : updater
+      const next = transform ? transform(raw, prev) : raw
       ref.current = next
       setState(next)
       // 저장 순서가 뒤바뀌지 않도록 하나의 큐에 이어 붙인다
       queueRef.current = queueRef.current.then(() => persistDiff(table, prev, next, toRow)).catch(onError)
     },
-    [table, toRow, queueRef, onError],
+    [table, toRow, queueRef, onError, transform],
   )
 
   // 서버에서 읽어온 값으로 덮어쓸 때(저장 없이)
@@ -134,18 +140,48 @@ function usePersistedState(table, toRow, queueRef, onError) {
 
 export function WorkoutLogsProvider({ children }) {
   const queueRef = useRef(Promise.resolve())
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // "내 정보"의 체중 — 신체 기록이 없을 때 칼로리 계산에 쓰는 대체값. 부가 정보라 조회에 실패해도 무시한다.
+  const [profileWeightKg, setProfileWeightKg] = useState(null)
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    supabase
+      .from('profiles')
+      .select('weight_kg')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.weight_kg) setProfileWeightKg(Number(data.weight_kg))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   const handleError = useCallback(e => {
     console.error(e)
     setError(e.message || '저장 중 오류가 발생했습니다.')
   }, [])
 
-  const [logs, setLogs, replaceLogs] = usePersistedState('workout_logs', logToRow, queueRef, handleError)
+  // 칼로리 계산에 쓰는 체중 출처(신체 기록, 내 정보 체중). setLogs가 저장 직전에 최신 값을 읽도록 ref에 둔다.
+  const weightSourceRef = useRef({ bodyRecords: [], profileWeightKg: null })
+  // DB에 kcal 칼럼이 아직 없으면(SQL 미실행) 칼로리를 채우지도 저장하지도 않아서 운동 기록 저장이 실패하지 않게 한다.
+  // (이때 화면의 칼로리는 저장값 없이 즉석 계산으로만 보인다)
+  const kcalColumnRef = useRef(true)
+  const transformLogs = useCallback((next, prev) => (kcalColumnRef.current ? applyKcal(next, prev, weightSourceRef.current) : next), [])
+  const toLogRow = useCallback(l => {
+    const row = logToRow(l)
+    if (!kcalColumnRef.current) delete row.kcal
+    return row
+  }, [])
+  const [logs, setLogs, replaceLogs] = usePersistedState('workout_logs', toLogRow, queueRef, handleError, transformLogs)
   const [routines, setRoutines, replaceRoutines] = usePersistedState('routines', routineToRow, queueRef, handleError)
   const [exercises, setExercises, replaceExercises] = usePersistedState('exercises', exerciseToRow, queueRef, handleError)
   const [bodyRecords, setBodyRecords, replaceBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleError)
+  weightSourceRef.current = { bodyRecords, profileWeightKg }
 
   useEffect(() => {
     let cancelled = false
@@ -169,12 +205,20 @@ export function WorkoutLogsProvider({ children }) {
       const loadedLogs = lo.data.map(logFromRow)
       replaceExercises(ex.data.map(exerciseFromRow))
       replaceRoutines(loadedRoutines)
+      const loadedBodyRecords = (bo.data ?? []).map(bodyRecordFromRow)
+      // kcal 칼럼 유무 확인: 행이 있는데 kcal 키가 없으면 칼럼이 아직 없는 것
+      if (lo.data.length && !('kcal' in lo.data[0])) {
+        kcalColumnRef.current = false
+        console.warn('workout_logs.kcal 칼럼이 없어 칼로리를 저장하지 않습니다. supabase/log_kcal.sql을 실행하세요.')
+      }
       replaceLogs(loadedLogs)
-      replaceBodyRecords((bo.data ?? []).map(bodyRecordFromRow))
+      replaceBodyRecords(loadedBodyRecords)
       setLoading(false)
-      // 앞으로 2주치 "예정" 기록을 채워 넣는다 (이미 있으면 건너뜀)
+      // 이 시점의 렌더 전이라 ref가 아직 비어 있으므로, 칼로리 채우기에 쓸 체중 출처를 직접 넣어 둔다
+      weightSourceRef.current = { ...weightSourceRef.current, bodyRecords: loadedBodyRecords }
+      // 앞으로 2주치 "예정" 기록을 채워 넣고(이미 있으면 건너뜀), 칼로리가 비어 있는 완료 기록(이 기능 이전 기록)은 체중을 알면 채운다
       const scheduled = generateScheduledLogs(loadedRoutines, loadedLogs)
-      if (scheduled.length) setLogs(prev => [...scheduled, ...prev])
+      setLogs(prev => [...scheduled, ...prev])
     })()
     return () => {
       cancelled = true
@@ -186,7 +230,7 @@ export function WorkoutLogsProvider({ children }) {
   }
 
   return (
-    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords }}>
+    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg }}>
       {error && (
         <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
           <span>{error}</span>

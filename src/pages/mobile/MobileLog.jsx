@@ -5,6 +5,9 @@ import WorkoutFormModal from '../../components/WorkoutFormModal.jsx'
 import RescheduleModal from '../../components/RescheduleModal.jsx'
 import BodyRecordModal from '../../components/mobile/BodyRecordModal.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
+import { useDayKcal } from '../../hooks/useDayKcal.js'
+import { useDayDuration } from '../../hooks/useDayDuration.js'
+import { formatDuration } from '../../lib/workoutTime.js'
 import { setCount, avgReps, avgWeight } from '../../lib/workoutMetrics.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../../hooks/useWorkoutLog.js'
 
@@ -54,6 +57,8 @@ export default function MobileLog() {
   } = useWorkoutLog()
   const { bodyRecords } = useWorkoutLogs()
   const [showBodyModal, setShowBodyModal] = useState(false)
+  const dayKcal = useDayKcal(listDate)
+  const daySeconds = useDayDuration(listDate)
 
   const today = new Date()
   // 선택한 날짜에 신체 기록이 있으면 목록 위에 요약을 보여준다 (누르면 수정)
@@ -194,8 +199,13 @@ export default function MobileLog() {
         {/* 선택 날짜 목록 */}
         <div className="flex items-center justify-between px-1">
           <span className="text-m-body font-black text-gray-800">{listDate}</span>
-          <span className="text-m-caption font-bold text-gray-400">{sidebarLogs.length}건</span>
+          <span className="text-m-caption font-bold text-gray-400">
+            {daySeconds != null && <span className="text-letusBlue mr-2">{formatDuration(daySeconds)}</span>}
+            {dayKcal.kcal != null && <span className="text-orange-600 mr-2">약 {dayKcal.kcal.toLocaleString()} kcal</span>}
+            {sidebarLogs.length}건
+          </span>
         </div>
+        {dayKcal.needsWeight && <div className="px-1 -mt-1 text-m-caption font-bold text-gray-400">신체 기록에 몸무게를 입력하면 소모 칼로리가 표시됩니다.</div>}
 
         {bodyRecordOfDay && (
           <button onClick={() => setShowBodyModal(true)} className="w-full text-left bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2.5 flex items-center gap-3 active:bg-emerald-100 transition-colors">

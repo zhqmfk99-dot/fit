@@ -5,6 +5,7 @@ import PageHeader from '../components/PageHeader.jsx'
 import StatCard from '../components/StatCard.jsx'
 import MuscleFatigueMap from '../components/web/MuscleFatigueMap.jsx'
 import BodyTrendChart from '../components/BodyTrendChart.jsx'
+import CalorieTrendChart from '../components/web/CalorieTrendChart.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { totalVolume } from '../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../lib/muscleMap.js'
@@ -45,6 +46,8 @@ export default function WorkoutDashboard() {
         </div>
 
         <BodyTrendChart records={bodyRecords} />
+
+        <CalorieTrendChart />
 
         {/* 부위별 피로도 / 볼륨 추이 좌우 배치 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

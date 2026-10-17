@@ -5,6 +5,7 @@ import PageHeader from '../../components/PageHeader.jsx'
 import StatCard from '../../components/mobile/StatCard.jsx'
 import MuscleFatigueMap from '../../components/mobile/MuscleFatigueMap.jsx'
 import BodyTrendChart from '../../components/mobile/BodyTrendChart.jsx'
+import CalorieTrendChart from '../../components/mobile/CalorieTrendChart.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { totalVolume } from '../../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../../lib/muscleMap.js'
@@ -46,6 +47,8 @@ export default function MobileDashboard() {
         </div>
 
         <BodyTrendChart records={bodyRecords} />
+
+        <CalorieTrendChart />
 
         <MuscleFatigueMap logs={logs} exercises={exercises} selectedMuscle={selectedMuscle} onSelectMuscle={setSelectedMuscle} />
 

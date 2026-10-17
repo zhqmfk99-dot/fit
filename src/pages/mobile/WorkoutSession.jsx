@@ -1,34 +1,85 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X, Check, Link2 } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
+import { useDayKcal } from '../../hooks/useDayKcal.js'
+import { useDayDuration } from '../../hooks/useDayDuration.js'
+import { formatDuration } from '../../lib/workoutTime.js'
 
 const DEFAULT_REST_SECONDS = 90
 // 세션이 끝나거나 종료할 때 돌아갈 곳 — 모바일 기록 화면 (데스크탑 경로 /workout/log로 가면 헤더 없는 데스크탑 화면이 열린다)
 const LOG_PATH = '/mobile/log'
 
-function StepperCard({ label, value, step, unit, onChange }) {
+// disabled: 이미 끝낸 세트를 보기만 할 때 — 조절 버튼을 막고 흐리게 보인다
+function StepperCard({ label, value, step, unit, onChange, disabled = false }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl px-5 py-4 shadow-sm">
+    <div className={`border rounded-2xl px-5 py-4 shadow-sm transition-colors ${disabled ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-200'}`}>
       <div className="text-m-caption font-bold text-gray-400 mb-2">{label}</div>
       <div className="flex items-center justify-between">
         <button
           onClick={() => onChange(Math.max(0, value - step))}
-          className="w-12 h-12 rounded-full bg-gray-100 text-gray-600 font-black text-xl flex items-center justify-center active:bg-gray-200 transition-colors"
+          disabled={disabled}
+          className={`w-12 h-12 rounded-full font-black text-xl flex items-center justify-center transition-colors ${
+            disabled ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+          }`}
         >
           −
         </button>
-        <span className="text-2xl font-black text-gray-800 tabular-nums">
+        <span className={`text-2xl font-black tabular-nums ${disabled ? 'text-gray-400' : 'text-gray-800'}`}>
           {value}
           {unit && <span className="text-m-body font-bold text-gray-400 ml-1">{unit}</span>}
         </span>
         <button
           onClick={() => onChange(value + step)}
-          className="w-12 h-12 rounded-full bg-letusBlue text-white font-black text-xl flex items-center justify-center active:bg-blue-600 transition-colors"
+          disabled={disabled}
+          className={`w-12 h-12 rounded-full font-black text-xl flex items-center justify-center transition-colors ${
+            disabled ? 'bg-gray-200 text-white cursor-not-allowed' : 'bg-letusBlue text-white active:bg-blue-600'
+          }`}
         >
           +
         </button>
+      </div>
+    </div>
+  )
+}
+
+// 세트 진행 도트 — 목표 세트 수만큼의 원. 끝낸 세트는 채운 원, 아직 안 한 세트는 빈 원이고,
+// 지금 하는 세트는 빈 원에 파란 테두리로 구분한다.
+// 끝낸 세트의 도트만 누를 수 있다(onSelect). 지금 보고 있는 끝낸 세트는 바깥 고리로 표시한다.
+// locked: 세트 정보를 수정하는 중에는 다른 세트로 이동하지 못하게 막는다.
+function SetDots({ total, done, viewing = null, locked = false, onSelect }) {
+  return (
+    <div className="flex justify-center mt-3">
+      <div
+        role="group"
+        aria-label={`${total}세트 중 ${done}세트 완료`}
+        className="inline-flex flex-wrap justify-center items-center max-w-full px-2 py-1 rounded-2xl bg-white border border-gray-200 shadow-sm"
+      >
+        {Array.from({ length: total }, (_, i) => {
+          const isDone = i < done
+          const dotClass = `block w-3.5 h-3.5 rounded-full border-2 transition-all ${
+            isDone ? 'bg-letusBlue border-letusBlue' : i === done ? 'border-letusBlue bg-transparent' : 'border-gray-300 bg-transparent'
+          } ${viewing === i ? 'ring-2 ring-letusBlue/40 ring-offset-2' : ''}`
+          // 점은 작게 보이지만 누르는 영역은 넉넉하게(약 30px) 잡는다
+          return isDone ? (
+            <button
+              key={i}
+              type="button"
+              disabled={locked}
+              onClick={() => onSelect?.(i)}
+              aria-label={`${i + 1}번째 세트 보기`}
+              aria-pressed={viewing === i}
+              className={`p-2 rounded-full ${locked ? 'cursor-not-allowed opacity-60' : 'active:bg-blue-50'}`}
+            >
+              <span className={dotClass} />
+            </button>
+          ) : (
+            <span key={i} className="p-2">
+              <span className={dotClass} />
+            </span>
+          )
+        })}
       </div>
     </div>
   )
@@ -72,6 +123,8 @@ export default function WorkoutSession() {
   const routineId = searchParams.get('routineId')
   const date = searchParams.get('date')
   const { logs, setLogs, routines, setRoutines } = useWorkoutLogs()
+  const dayKcal = useDayKcal(date)
+  const daySeconds = useDayDuration(date)
 
   const routine = routines.find(r => r.id === routineId)
 
@@ -116,6 +169,12 @@ export default function WorkoutSession() {
   const [restNextAction, setRestNextAction] = useState(null)
   const [progressionNotes, setProgressionNotes] = useState([])
 
+  // 끝낸 세트 보기/수정: reviewIdx = 보고 있는 끝낸 세트(0부터, null이면 지금 하는 세트), editing = 수정 중, editForm = 수정 중인 값
+  const [reviewIdx, setReviewIdx] = useState(null)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState(null)
+  const reviewEnteredAtRef = useRef(null) // 끝낸 세트를 보기 시작한 시각 — 그동안은 현재 세트 소요 시간에서 빼 준다
+
   // 그룹이 바뀌면(다음 운동/수퍼세트로 넘어가면) 진행 상태를 전부 초기화
   useEffect(() => {
     setSubPhase('ready')
@@ -123,6 +182,10 @@ export default function WorkoutSession() {
     setPerformedByLog({})
     setSetForm(null)
     setPendingRestBefore(null)
+    setReviewIdx(null)
+    setEditing(false)
+    setEditForm(null)
+    reviewEnteredAtRef.current = null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIdx])
 
@@ -193,7 +256,51 @@ export default function WorkoutSession() {
     setPendingRestBefore(restBefore)
     setSetForm({ reps: log.targetReps || 0, weight: log.targetWeight || 0 })
     setSetStartAt(Date.now())
+    setReviewIdx(null)
+    setEditing(false)
+    setEditForm(null)
+    reviewEnteredAtRef.current = null
     setSubPhase('active')
+  }
+
+  // ── 끝낸 세트 보기·수정 ─────────────────────────────────────────
+  // 이미 끝낸 세트의 기록은 performedByLog에 있고, 이 운동의 마지막 세트를 끝낼 때 한꺼번에 저장된다.
+  // 그래서 여기서 고친 값이 그대로 저장·피로도·칼로리 계산에 쓰인다.
+  const doneSets = currentLog ? performedByLog[currentLog.id] || [] : []
+  const openFinishedSet = i => {
+    if (editing || i >= doneSets.length) return
+    if (reviewIdx === null) reviewEnteredAtRef.current = Date.now()
+    setReviewIdx(i)
+  }
+  const backToCurrentSet = () => {
+    // 끝낸 세트를 보고 있던 시간은 현재 세트가 걸린 시간에 들어가지 않게 시작 시각을 그만큼 늦춘다
+    if (reviewEnteredAtRef.current) {
+      const paused = Date.now() - reviewEnteredAtRef.current
+      setSetStartAt(t => (t == null ? t : t + paused))
+      reviewEnteredAtRef.current = null
+    }
+    setReviewIdx(null)
+    setEditing(false)
+    setEditForm(null)
+  }
+  const startEdit = () => {
+    const s = doneSets[reviewIdx]
+    if (!s) return
+    setEditForm({ reps: s.reps, weight: s.weight })
+    setEditing(true)
+  }
+  const cancelEdit = () => {
+    setEditing(false)
+    setEditForm(null)
+  }
+  const saveEdit = () => {
+    if (!currentLog || !editForm) return
+    setPerformedByLog(prev => ({
+      ...prev,
+      [currentLog.id]: (prev[currentLog.id] || []).map((s, i) => (i === reviewIdx ? { ...s, reps: editForm.reps, weight: editForm.weight } : s)),
+    }))
+    setEditing(false)
+    setEditForm(null)
   }
 
   const startRest = (seconds, nextAction) => {
@@ -241,8 +348,9 @@ export default function WorkoutSession() {
 
   const completeSet = () => {
     if (!setForm || !currentLog || !currentStep) return
-    const durationSeconds = Math.max(1, Math.round((Date.now() - setStartAt) / 1000))
-    const newSet = { reps: setForm.reps, weight: setForm.weight, durationSeconds, restBeforeSeconds: pendingRestBefore }
+    const endedAt = Date.now()
+    const durationSeconds = Math.max(1, Math.round((endedAt - setStartAt) / 1000))
+    const newSet = { reps: setForm.reps, weight: setForm.weight, durationSeconds, restBeforeSeconds: pendingRestBefore, startedAt: setStartAt, endedAt }
     const updatedForLog = [...(performedByLog[currentLog.id] || []), newSet]
     const nextPerformed = { ...performedByLog, [currentLog.id]: updatedForLog }
     setPerformedByLog(nextPerformed)
@@ -437,22 +545,52 @@ export default function WorkoutSession() {
               🔗 수퍼세트 {memberIdx + 1}/{groupLogs.length}
             </div>
           )}
-          <div className="text-m-caption font-bold text-gray-400 text-center mb-1">
-            {currentStep.round + 1}/{currentLog.targetSets} 세트
-          </div>
-          <div className="text-2xl font-black text-gray-800 text-center mt-1 mb-8">{currentLog.exercise}</div>
-
-          <div className="space-y-4">
-            <StepperCard label="반복" value={setForm.reps} step={1} onChange={v => setSetForm(f => ({ ...f, reps: v }))} />
-            <StepperCard label="무게" value={setForm.weight} step={2.5} unit="kg" onChange={v => setSetForm(f => ({ ...f, weight: v }))} />
+          <div className="text-2xl font-black text-gray-800 text-center mt-1">{currentLog.exercise}</div>
+          <SetDots total={currentLog.targetSets || 1} done={doneSets.length} viewing={reviewIdx} locked={editing} onSelect={openFinishedSet} />
+          {/* 끝낸 세트를 보고 있을 때만 안내가 나온다. 화면이 출렁이지 않게 자리는 항상 잡아 둔다 */}
+          <div className={`h-5 mt-3 mb-4 text-center text-m-caption font-bold ${editing ? 'text-letusBlue' : 'text-gray-400'}`}>
+            {reviewIdx !== null && `${reviewIdx + 1}번째 세트 · ${editing ? '수정 중' : '완료한 기록'}`}
           </div>
 
-          <button
-            onClick={completeSet}
-            className="w-full h-16 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8"
-          >
-            세트 완료
-          </button>
+          {(() => {
+            // 끝낸 세트를 보는 중이면 그 세트의 기록을(수정 중이면 수정 값을), 아니면 지금 하는 세트의 값을 보여준다
+            const reviewing = reviewIdx !== null
+            const shown = reviewing ? (editing ? editForm : doneSets[reviewIdx]) : setForm
+            const change = field => v => (reviewing ? setEditForm(f => ({ ...f, [field]: v })) : setSetForm(f => ({ ...f, [field]: v })))
+            return (
+              <div className="space-y-4">
+                <StepperCard label="반복" value={shown.reps} step={1} onChange={change('reps')} disabled={reviewing && !editing} />
+                <StepperCard label="무게" value={shown.weight} step={2.5} unit="kg" onChange={change('weight')} disabled={reviewing && !editing} />
+              </div>
+            )
+          })()}
+
+          {reviewIdx === null ? (
+            <button
+              onClick={completeSet}
+              className="w-full h-16 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8"
+            >
+              세트 완료
+            </button>
+          ) : editing ? (
+            <>
+              <button onClick={saveEdit} className="w-full h-16 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8">
+                수정 완료
+              </button>
+              <button onClick={cancelEdit} className="mx-auto mt-2 px-4 py-3 text-m-body font-bold text-gray-400 underline underline-offset-2">
+                수정 취소
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={startEdit} className="w-full h-16 bg-gray-800 text-white font-black text-m-title rounded-2xl shadow-lg shadow-gray-900/10 active:scale-[0.98] transition-all mt-8">
+                수정하기
+              </button>
+              <button onClick={backToCurrentSet} className="mx-auto mt-2 px-4 py-3 text-m-body font-bold text-letusBlue underline underline-offset-2">
+                현재 세트로 돌아가기
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -488,6 +626,24 @@ export default function WorkoutSession() {
           <div className="text-5xl">🎉</div>
           <div className="text-xl font-black text-gray-800">오늘 루틴 완료!</div>
           <div className="text-m-caption text-gray-400">{routine.name}</div>
+
+          {/* 총 운동 시간 — 세트 시작·종료 시각을 합친 실측값 (사이 휴식 포함, 15분 넘게 쉰 구간은 제외) */}
+          {daySeconds != null && (
+            <div className="w-full max-w-sm bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 mt-2">
+              <div className="text-m-caption font-bold text-letusBlue">오늘 총 운동 시간</div>
+              <div className="text-2xl font-black text-letusBlue mt-0.5">{formatDuration(daySeconds)}</div>
+            </div>
+          )}
+
+          {/* 오늘 소모 칼로리 추정 — 시간(휴식 포함)과 강도를 반영한 추정치라서 "약"으로 표시한다 */}
+          {dayKcal.kcal != null && (
+            <div className="w-full max-w-sm bg-orange-50 border border-orange-100 rounded-2xl px-4 py-3 mt-2">
+              <div className="text-m-caption font-bold text-orange-700">오늘 소모 칼로리 (추정)</div>
+              <div className="text-2xl font-black text-orange-600 mt-0.5">약 {dayKcal.kcal.toLocaleString()} kcal</div>
+              <div className="text-m-caption text-orange-700/70 mt-1">웨이트 소모량은 개인차가 커서 오차가 있을 수 있어요.</div>
+            </div>
+          )}
+          {dayKcal.needsWeight && <div className="text-m-caption font-bold text-gray-400">신체 기록에 몸무게를 입력하면 소모 칼로리가 표시됩니다.</div>}
 
           {progressionNotes.length > 0 && (
             <div className="w-full max-w-sm space-y-1.5 mt-4 text-left">

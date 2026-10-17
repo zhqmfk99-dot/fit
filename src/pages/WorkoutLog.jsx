@@ -3,6 +3,9 @@ import { ChevronDown, CalendarClock, Play } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import WorkoutFormModal from '../components/web/WorkoutFormModal.jsx'
 import BodyRecordModal from '../components/BodyRecordModal.jsx'
+import { useDayKcal } from '../hooks/useDayKcal.js'
+import { useDayDuration } from '../hooks/useDayDuration.js'
+import { formatDuration } from '../lib/workoutTime.js'
 import RescheduleModal from '../components/web/RescheduleModal.jsx'
 import { setCount, avgReps, avgWeight } from '../lib/workoutMetrics.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../hooks/useWorkoutLog.js'
@@ -41,6 +44,8 @@ export default function WorkoutLog() {
     handleModalSave,
   } = useWorkoutLog()
   const [showBodyModal, setShowBodyModal] = useState(false)
+  const dayKcal = useDayKcal(listDate)
+  const daySeconds = useDayDuration(listDate)
 
   const renderLogRow = log => (
     <div
@@ -234,7 +239,20 @@ export default function WorkoutLog() {
                 </div>
                 <span className="bg-blue-100 text-letusBlue text-ui-caption font-bold px-2 py-0.5 rounded-full leading-none">{sidebarLogs.length}건</span>
               </div>
-              <div className="text-ui-caption font-bold text-gray-500 pl-3 leading-none">{listDate}</div>
+              <div className="flex items-center justify-between pl-3 leading-none">
+                <span className="text-ui-caption font-bold text-gray-500">{listDate}</span>
+                {daySeconds != null && (
+                  <span className="text-ui-caption font-bold text-letusBlue" title="세트 시작·종료 시각을 합친 총 운동 시간입니다">
+                    {formatDuration(daySeconds)}
+                  </span>
+                )}
+                {dayKcal.kcal != null && (
+                  <span className="text-ui-caption font-bold text-orange-600" title="시간 기반 MET에 강도를 반영한 추정치입니다 (오차가 큽니다)">
+                    약 {dayKcal.kcal.toLocaleString()} kcal
+                  </span>
+                )}
+                {dayKcal.needsWeight && <span className="text-ui-caption font-bold text-gray-400">신체 기록에 몸무게를 입력하면 칼로리가 표시됩니다</span>}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 custom-scrollbar">
