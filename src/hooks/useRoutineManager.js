@@ -10,9 +10,20 @@ export function useRoutineManager() {
   const [showFormModal, setShowFormModal] = useState(false)
   const [formRow, setFormRow] = useState(null)
   const [detailRow, setDetailRow] = useState(null)
+  // AI 루틴 만들기: 조건 입력 모달 → 만들어진 초안(draftRow)을 루틴 등록 화면에 채워 연다 (수정이 아니라 새 루틴이라 formRow는 null)
+  const [showAiModal, setShowAiModal] = useState(false)
+  const [draftRow, setDraftRow] = useState(null)
 
   const openCreate = () => {
     setFormRow(null)
+    setDraftRow(null)
+    setShowFormModal(true)
+  }
+  const openAiCreate = () => setShowAiModal(true)
+  const handleAiDraft = draft => {
+    setShowAiModal(false)
+    setFormRow(null)
+    setDraftRow(draft)
     setShowFormModal(true)
   }
   const enterEditMode = () => {
@@ -31,6 +42,7 @@ export function useRoutineManager() {
     const routine = routines.find(r => r.id === selectedId)
     if (!routine) return
     setFormRow(routine)
+    setDraftRow(null)
     setShowFormModal(true)
     exitEditMode()
   }
@@ -54,7 +66,12 @@ export function useRoutineManager() {
     showFormModal,
     formRow,
     detailRow,
+    showAiModal,
+    draftRow,
     openCreate,
+    openAiCreate,
+    handleAiDraft,
+    setShowAiModal,
     enterEditMode,
     exitEditMode,
     toggleSelect,

@@ -1,6 +1,7 @@
-import { Plus, Pencil, Check } from 'lucide-react'
+import { Plus, Pencil, Check, Sparkles } from 'lucide-react'
 import PageHeader from '../../components/PageHeader.jsx'
 import RoutineFormModal from '../../components/RoutineFormModal.jsx'
+import AiRoutineModal from '../../components/AiRoutineModal.jsx'
 import RoutineDetailModal from '../../components/RoutineDetailModal.jsx'
 import { useRoutineManager } from '../../hooks/useRoutineManager.js'
 
@@ -15,7 +16,12 @@ export default function MobileRoutines() {
     showFormModal,
     formRow,
     detailRow,
+    showAiModal,
+    draftRow,
     openCreate,
+    openAiCreate,
+    handleAiDraft,
+    setShowAiModal,
     enterEditMode,
     exitEditMode,
     toggleSelect,
@@ -82,6 +88,13 @@ export default function MobileRoutines() {
         <div className="pt-1 text-m-caption font-bold text-gray-400">총 {routines.length}건</div>
 
         <button
+          onClick={openAiCreate}
+          className="w-full flex items-center justify-center gap-1.5 bg-letusBlue text-white rounded-lg py-3 text-m-body font-bold active:bg-blue-600 transition-colors"
+        >
+          <Sparkles className="w-4 h-4" />
+          AI로 루틴 만들기
+        </button>
+        <button
           onClick={openCreate}
           className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-3 text-m-body font-bold text-gray-400 active:border-letusBlue active:text-letusBlue transition-colors"
         >
@@ -118,7 +131,8 @@ export default function MobileRoutines() {
         )}
       </div>
 
-      {showFormModal && <RoutineFormModal row={formRow} onClose={() => setShowFormModal(false)} onSave={handleFormSave} />}
+      {showAiModal && <AiRoutineModal onClose={() => setShowAiModal(false)} onDraft={handleAiDraft} />}
+      {showFormModal && <RoutineFormModal row={formRow} draft={draftRow} draftNote={draftRow?.note} onClose={() => setShowFormModal(false)} onSave={handleFormSave} />}
       {detailRow && (
         <RoutineDetailModal
           row={detailRow}

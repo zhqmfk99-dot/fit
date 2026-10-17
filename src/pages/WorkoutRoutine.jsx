@@ -1,7 +1,8 @@
 ﻿import { useState } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Sparkles } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import RoutineFormModal from '../components/web/RoutineFormModal.jsx'
+import AiRoutineModal from '../components/web/AiRoutineModal.jsx'
 import RoutineDetailModal from '../components/web/RoutineDetailModal.jsx'
 import { useRoutineManager } from '../hooks/useRoutineManager.js'
 
@@ -22,7 +23,12 @@ export default function WorkoutRoutine() {
     showFormModal,
     formRow,
     detailRow,
+    showAiModal,
+    draftRow,
     openCreate,
+    openAiCreate,
+    handleAiDraft,
+    setShowAiModal,
     handleFormSave,
     handleDelete,
     toggleActive,
@@ -78,13 +84,22 @@ export default function WorkoutRoutine() {
               ))}
             </div>
           </div>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 bg-letusBlue text-white text-ui-body font-bold px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            루틴 추가
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openAiCreate}
+              className="flex items-center gap-1.5 bg-white border border-letusBlue text-letusBlue text-ui-body font-bold px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              AI로 만들기
+            </button>
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-1.5 bg-letusBlue text-white text-ui-body font-bold px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              루틴 추가
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -187,7 +202,8 @@ export default function WorkoutRoutine() {
         </div>
       </div>
 
-      {showFormModal && <RoutineFormModal row={formRow} onClose={() => setShowFormModal(false)} onSave={handleFormSave} />}
+      {showAiModal && <AiRoutineModal onClose={() => setShowAiModal(false)} onDraft={handleAiDraft} />}
+      {showFormModal && <RoutineFormModal row={formRow} draft={draftRow} draftNote={draftRow?.note} onClose={() => setShowFormModal(false)} onSave={handleFormSave} />}
       {detailRow && (
         <RoutineDetailModal
           row={detailRow}

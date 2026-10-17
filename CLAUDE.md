@@ -89,6 +89,16 @@ PWA(모바일) 화면은 터치 화면이라 웹앱보다 크게 잡은 별도 �
 - 시각이 없는 기록(이 기능 이전, 직접 입력)은 계산에서 빠지고, 하루에 시각이 하나도 없으면 표시하지 않는다. 과거 기록은 채울 수 없다.
 - 표시: 웹앱 기록 화면(오른쪽 카드 날짜 줄), PWA 기록 화면(날짜 줄), PWA 운동 완료 화면. 칼로리 계산에는 `logSeconds`가 실측 시각으로 운동 시작 전 준비 시간(직전 세트 종료~첫 세트 시작, 최대 300초)을 반영한다. 시각이 없거나 그날 첫 운동이면 60초 가정값.
 
+## AI 루틴 만들기 (Gemini)
+- 웹앱 루틴 화면 "AI로 만들기" 버튼, PWA 루틴 화면 "AI로 루틴 만들기" 버튼. 조건(목표·경력·시간·집중 부위·장비·요일·추가 요청)을 고르면 **루틴 등록 화면에 초안이 채워진다**(바로 저장되지 않고, 사용자가 확인·수정 후 저장). 등록 모달의 `draft`/`draftNote` props, `useRoutineManager`의 `openAiCreate`/`handleAiDraft`/`draftRow`.
+- 역할 분담: AI는 "어떤 운동을 몇 세트·몇 회·휴식 몇 초, 수퍼세트 여부"만 정한다. 계산(칼로리·피로도·점진 과부하)은 코드가 한다. **무게는 AI가 정하지 않고** 내가 전에 한 기록(`lib/aiRoutine.js`의 `lastWeightFor`)이 있으면 그 값, 없으면 빈칸.
+- 구조: 브라우저 → `/api/generate-routine`(Vercel 서버리스, `api/generate-routine.js`) → Gemini. **API 키(`GEMINI_API_KEY`)는 서버 함수에서만** 쓰며 브라우저 코드·응답·로그에 넣지 않는다. 개발 서버(`npm run dev`)는 `vite.config.js`의 `localApi` 플러그인이 `/api/*`를 처리하고 `.env.local`의 서버용 값을 읽는다.
+- 환경변수(Vercel + 로컬 `.env.local`): `GEMINI_API_KEY`(필수), `GEMINI_MODEL`(선택, 기본 `gemini-2.5-flash`), `AI_DAILY_LIMIT`(선택, 기본 10). Supabase URL/ANON 키는 기존 `VITE_` 값을 서버 함수도 쓴다.
+- 안전장치: 로그인 토큰 검증, 사용자별 24시간 호출 한도(`ai_usage` 테이블, `supabase/ai_usage.sql` — **배포 전에 실행**, 없으면 AI 호출이 거부됨), 호출 전에 사용량 먼저 기록, 요청 입력 검증, 응답은 JSON 스키마로 받고 **운동 목록에 없는 id·중복·범위 밖 숫자를 서버가 걸러낸다**(`sanitizeResult`).
+- 개인정보: 조건과 운동 리스트(이름·부위·장비·동작 패턴·유형)만 Gemini로 보낸다. 이름·이메일·신체 정보·운동 기록은 보내지 않는다(모달에 안내 문구 있음). 부상·통증은 진단하지 않고 전문가 상담을 안내하게 지시.
+- UI는 웹앱(`components/web/AiRoutineModal.jsx`, `text-ui-*`)과 PWA(`components/AiRoutineModal.jsx`, `text-m-*`)를 따로 둔다. 로직은 `hooks/useAiRoutine.js`, `lib/aiRoutine.js` 공용.
+- 확인한 것: 서버 함수는 가짜 Gemini·Supabase 응답으로 10개 시나리오(정상, 인증 실패, 한도 초과, AI 응답 불량 등) 검증, 화면은 가짜 서버로 웹앱·PWA 흐름 검증. **실제 Gemini 응답 품질은 키를 넣고 써 봐야 알 수 있다.**
+
 ## 작업 규칙
 - Windows 경로 길이 문제로 저장소는 `C:\dev\fit`에 둔다.
 - 변경 후 `npm run build`가 통과하는지 확인한다.

@@ -21,15 +21,17 @@ const renderHighlight = (text, query) => {
   )
 }
 
-export default function RoutineFormModal({ row, onClose, onSave }) {
+// row: 수정할 기존 루틴 / draft: 새 루틴의 초기값(AI가 만든 초안 — 수정이 아니라 새로 등록) / draftNote: 초안 안내 문구
+export default function RoutineFormModal({ row, draft, draftNote, onClose, onSave }) {
   const isEdit = !!row
+  const init = row ?? draft
   const { routines, exercises: exerciseCatalog } = useWorkoutLogs()
   const knownExercises = useMemo(() => getKnownExerciseNames(routines, exerciseCatalog), [routines, exerciseCatalog])
 
-  const [name, setName] = useState(row?.name || '')
-  const [isActive, setIsActive] = useState(row?.isActive ?? true)
-  const [repeatDays, setRepeatDays] = useState(row?.repeatDays || [])
-  const [exercises, setExercises] = useState(row?.exercises?.map(e => ({ ...e })) || [emptyExercise()])
+  const [name, setName] = useState(init?.name || '')
+  const [isActive, setIsActive] = useState(init?.isActive ?? true)
+  const [repeatDays, setRepeatDays] = useState(init?.repeatDays || [])
+  const [exercises, setExercises] = useState(init?.exercises?.map(e => ({ ...e })) || [emptyExercise()])
   const [errorMsg, setErrorMsg] = useState('')
   const [dragIndex, setDragIndex] = useState(null)
   const [dropdownIdx, setDropdownIdx] = useState(null)
@@ -117,6 +119,12 @@ export default function RoutineFormModal({ row, onClose, onSave }) {
         </div>
 
         <div className="p-6 bg-slate-50 flex-1 overflow-y-auto max-h-[70vh] space-y-4">
+          {draft && (
+            <div className="bg-blue-50 text-letusBlue text-m-caption font-bold p-3 rounded border border-blue-100 leading-relaxed">
+              ✨ AI가 만든 초안이에요. 운동·무게를 확인하고 고친 뒤 저장해 주세요.
+              {draftNote && <div className="mt-1 font-normal text-gray-600">{draftNote}</div>}
+            </div>
+          )}
           {errorMsg && (
             <div className="bg-red-50 text-red-600 text-m-body font-bold p-3 rounded border border-red-100 flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
