@@ -4,6 +4,7 @@ import PageHeader from '../components/PageHeader.jsx'
 import RoutineFormModal from '../components/web/RoutineFormModal.jsx'
 import AiRoutineModal from '../components/web/AiRoutineModal.jsx'
 import RoutineDetailModal from '../components/web/RoutineDetailModal.jsx'
+import { repsText } from '../lib/progression.js'
 import { useRoutineManager } from '../hooks/useRoutineManager.js'
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
@@ -14,7 +15,7 @@ const FILTERS = [
 ]
 
 // "스쿼트 5×5 80kg" 형태로 한 운동을 요약
-const summarizeExercise = ex => `${ex.exercise} ${ex.sets}×${ex.reps}${Number(ex.weight) ? ` ${ex.weight}kg` : ''}`
+const summarizeExercise = ex => `${ex.exercise} ${ex.sets}×${repsText(ex)}${Number(ex.weight) ? ` ${ex.weight}kg` : ''}`
 
 // 웹앱 전용 루틴 화면. 수정 모드 없이 행에서 바로 수정/삭제한다. (PWA는 MobileRoutines.jsx)
 export default function WorkoutRoutine() {

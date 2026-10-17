@@ -3,10 +3,11 @@ import PageHeader from '../../components/PageHeader.jsx'
 import RoutineFormModal from '../../components/RoutineFormModal.jsx'
 import AiRoutineModal from '../../components/AiRoutineModal.jsx'
 import RoutineDetailModal from '../../components/RoutineDetailModal.jsx'
+import { repsText } from '../../lib/progression.js'
 import { useRoutineManager } from '../../hooks/useRoutineManager.js'
 
 // "스쿼트 5×5 80kg" 형태로 한 운동을 요약
-const summarizeExercise = ex => `${ex.exercise} ${ex.sets}×${ex.reps}${Number(ex.weight) ? ` ${ex.weight}kg` : ''}`
+const summarizeExercise = ex => `${ex.exercise} ${ex.sets}×${repsText(ex)}${Number(ex.weight) ? ` ${ex.weight}kg` : ''}`
 
 export default function MobileRoutines() {
   const {

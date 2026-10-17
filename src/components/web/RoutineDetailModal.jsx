@@ -1,4 +1,6 @@
-﻿const ALL_DAYS = ['월', '화', '수', '목', '금', '토', '일']
+﻿import { repsText } from '../../lib/progression.js'
+
+const ALL_DAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 export default function RoutineDetailModal({ row, onClose, onEdit, onDelete }) {
   if (!row) return null
@@ -61,7 +63,7 @@ export default function RoutineDetailModal({ row, onClose, onEdit, onDelete }) {
                 <div key={i} className="flex items-center justify-between text-ui-body">
                   <span className="text-gray-700">{ex.exercise}</span>
                   <span className="text-gray-400">
-                    {ex.sets}세트 x {ex.reps}회 x {ex.weight}kg
+                    {ex.sets}세트 x {repsText(ex)}회 x {ex.weight}kg
                   </span>
                 </div>
               ))

@@ -5,6 +5,7 @@ import ProfileModal from '../../components/ProfileModal.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import QuickWorkoutModal from './QuickWorkoutModal.jsx'
+import { targetRepsOf } from '../../lib/progression.js'
 
 const MENU_ITEMS = [
   { path: '/mobile/dashboard', label: '대시보드', icon: LayoutDashboard, iconBg: 'bg-blue-50', iconColor: 'text-letusBlue' },
@@ -58,7 +59,7 @@ export default function MobileMenuScreen() {
       exercise: ex.exercise,
       routineId,
       targetSets: ex.sets,
-      targetReps: ex.reps,
+      targetReps: targetRepsOf(ex),
       targetWeight: ex.weight,
       restSeconds: ex.restSeconds ?? 90,
       linkedToNext: !!ex.linkedToNext,

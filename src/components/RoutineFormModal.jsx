@@ -6,7 +6,7 @@ import { buildTagIndex, matchesQuery, aliasMatch } from '../lib/exerciseSearch.j
 
 const ACCENT = 'bg-letusOrange'
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
-const emptyExercise = () => ({ exercise: '', sets: '', reps: '', weight: '', restSeconds: '', linkedToNext: false })
+const emptyExercise = () => ({ exercise: '', sets: '', reps: '', repsMax: '', weight: '', restSeconds: '', linkedToNext: false })
 
 const renderHighlight = (text, query) => {
   if (!query) return text
@@ -50,7 +50,9 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
 
   const addExercise = () => setExercises(prev => [...prev, emptyExercise()])
   const removeExercise = idx => setExercises(prev => prev.filter((_, i) => i !== idx))
-  const updateExercise = (idx, field, value) => setExercises(prev => prev.map((e, i) => (i === idx ? { ...e, [field]: value } : e)))
+  // 반복 범위(최소·최대)를 직접 바꾸면, 앱이 자동으로 올려 둔 지금 목표 횟수(progressReps)는 버리고 새 범위의 하한부터 다시 시작한다
+  const updateExercise = (idx, field, value) =>
+    setExercises(prev => prev.map((e, i) => (i === idx ? { ...e, [field]: value, ...(field === 'reps' || field === 'repsMax' ? { progressReps: undefined } : {}) } : e)))
 
   // 마우스·터치 둘 다에서 되게 HTML5 draggable 대신 포인터 이벤트로 직접 순서를 바꾼다
   // (모바일 브라우저는 네이티브 drag-and-drop을 지원하지 않는 경우가 많다)
@@ -88,6 +90,8 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
         reps: Number(e.reps) || 0,
         weight: Number(e.weight) || 0,
         restSeconds: Number(e.restSeconds) || 90,
+        ...(Number(e.repsMax) > 0 ? { repsMax: Number(e.repsMax) } : {}),
+        ...(Number(e.progressReps) > 0 ? { progressReps: Number(e.progressReps) } : {}),
         linkedToNext: !!e.linkedToNext,
       }))
     // 목록 맨 끝 운동은 "다음 운동"이 없으니 묶기 표시가 남아있어도 무시한다
@@ -246,7 +250,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
                         </svg>
                       </button>
                     </div>
-                    <div className="grid grid-cols-4 gap-1.5">
+                    <div className="grid grid-cols-3 gap-1.5">
                       <input
                         type="number"
                         value={ex.sets}
@@ -258,7 +262,16 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
                         type="number"
                         value={ex.reps}
                         onChange={e => updateExercise(idx, 'reps', e.target.value)}
-                        placeholder="반복"
+                        placeholder="최소 반복"
+                        title="반복 범위의 하한 (예: 8~12회면 8)"
+                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-m-body focus:outline-none focus:border-letusOrange"
+                      />
+                      <input
+                        type="number"
+                        value={ex.repsMax ?? ''}
+                        onChange={e => updateExercise(idx, 'repsMax', e.target.value)}
+                        placeholder="최대 반복"
+                        title="반복 범위의 상한 (예: 8~12회면 12). 비우면 최소+4회(최소 6 미만이면 +2회). 모든 세트가 상한을 채우면 무게를 올려요"
                         className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-m-body focus:outline-none focus:border-letusOrange"
                       />
                       <input

@@ -6,6 +6,17 @@ import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMe
 import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
 import { formatDuration } from '../../lib/workoutTime.js'
+import { evaluateSession, applyNextToPlan, findPrevLog, summarizePerformed } from '../../lib/progression.js'
+
+// 평가 결과(올리기/유지/낮추기)에 따른 글자색·기호
+const VERDICT_STYLE = {
+  'weight-up': { color: 'text-letusBlue', icon: '▲' },
+  'reps-up': { color: 'text-letusBlue', icon: '▲' },
+  'sets-up': { color: 'text-letusBlue', icon: '▲' },
+  hold: { color: 'text-gray-500', icon: '＝' },
+  deload: { color: 'text-orange-600', icon: '▼' },
+}
+const kgLabel = w => (w ? `${w}kg` : '맨몸')
 
 const DEFAULT_REST_SECONDS = 90
 // 세션이 끝나거나 종료할 때 돌아갈 곳 — 모바일 기록 화면 (데스크탑 경로 /workout/log로 가면 헤더 없는 데스크탑 화면이 열린다)
@@ -122,7 +133,7 @@ export default function WorkoutSession() {
   const [searchParams] = useSearchParams()
   const routineId = searchParams.get('routineId')
   const date = searchParams.get('date')
-  const { logs, setLogs, routines, setRoutines } = useWorkoutLogs()
+  const { logs, setLogs, routines, setRoutines, exercises: exerciseCatalog } = useWorkoutLogs()
   const dayKcal = useDayKcal(date)
   const daySeconds = useDayDuration(date)
 
@@ -311,39 +322,43 @@ export default function WorkoutSession() {
     setSubPhase('rest')
   }
 
-  // 목표 세트를 전부 목표치 이상으로 채웠고 피로도가 낮음~보통(1-3)이면 다음 주기 루틴을 올리고,
-  // 아니면 그대로 유지한다 — 체중 운동(목표 무게 0)은 무게 대신 반복 횟수를 올린다.
-  const WEIGHT_INCREMENT = 2.5
+  // 운동 하나를 끝내면 수행 능력을 평가해서(lib/progression.js, 이중 점진) 다음 목표(세트/횟수/무게)를 정한다.
+  // 바뀐 목표는 루틴과, 이미 미리 만들어진 같은 운동의 앞으로 예정된 기록(2주치)에 같이 반영한다 — 루틴만 고치면 미리 만든 기록은 옛 목표 그대로라서.
+  const planOf = log => routines.find(r => r.id === log.routineId)?.exercises.find(e => e.exercise === log.exercise)
+  const metaOf = log => exerciseCatalog.find(e => e.name === log.exercise)
   const applyProgression = (log, performedSets, fatigue) => {
     if (!log.routineId) return
-    const metTarget = performedSets.every(s => s.reps >= (log.targetReps || 0) && s.weight >= (log.targetWeight || 0))
-    const shouldProgress = metTarget && fatigue <= 3
-    if (!shouldProgress) {
-      setProgressionNotes(prev => [...prev, { exercise: log.exercise, progressed: false }])
-      return
-    }
+    const result = evaluateSession({ log: { ...log, performedSets, fatigue }, plan: planOf(log), prev: findPrevLog(logs, log), meta: metaOf(log) })
+    if (!result) return
+    setProgressionNotes(prev => [...prev, { exercise: log.exercise, verdict: result.verdict, label: result.label, reason: result.reason, next: result.next }])
+    if (result.verdict === 'hold') return // 목표를 그대로 두는 경우는 바꿀 게 없다
 
-    const isBodyweight = (log.targetWeight || 0) === 0
+    pushTargets(log, result.next, false)
+  }
+
+  // 새 목표를 루틴과, 같은 운동의 앞으로 예정된 기록에 반영한다. includeSelf면 이 기록(오늘 것)에도 반영.
+  const pushTargets = (log, next, includeSelf) => {
     setRoutines(prev =>
       prev.map(r =>
-        r.id === log.routineId
-          ? {
-              ...r,
-              exercises: r.exercises.map(ex =>
-                ex.exercise === log.exercise
-                  ? isBodyweight
-                    ? { ...ex, reps: (Number(ex.reps) || 0) + 1 }
-                    : { ...ex, weight: (Number(ex.weight) || 0) + WEIGHT_INCREMENT }
-                  : ex,
-              ),
-            }
-          : r,
+        r.id === log.routineId ? { ...r, exercises: r.exercises.map(ex => (ex.exercise === log.exercise ? applyNextToPlan(ex, next) : ex)) } : r,
       ),
     )
-    setProgressionNotes(prev => [
-      ...prev,
-      isBodyweight ? { exercise: log.exercise, progressed: true, kind: 'reps', delta: 1 } : { exercise: log.exercise, progressed: true, kind: 'weight', delta: WEIGHT_INCREMENT },
-    ])
+    setLogs(prev =>
+      prev.map(l =>
+        (includeSelf && l.id === log.id) || (l.routineId === log.routineId && l.exercise === log.exercise && !l.isCompleted && l.date > log.date)
+          ? { ...l, targetSets: next.sets, targetReps: next.reps, targetWeight: next.weight }
+          : l,
+      ),
+    )
+  }
+  const sameTarget = (log, next) =>
+    (log.targetSets || 0) === next.sets && (Number(log.targetReps) || 0) === next.reps && (Number(log.targetWeight) || 0) === next.weight
+
+  // 시작 화면용: 이 운동의 지난번 기록과 그때의 평가 (처음 하는 운동이면 null)
+  const lastSessionInfo = log => {
+    const prev = findPrevLog(logs, log)
+    if (!prev) return null
+    return { prev, result: evaluateSession({ log: prev, plan: planOf(log), prev: findPrevLog(logs, prev), meta: metaOf(log) }) }
   }
 
   const completeSet = () => {
@@ -510,14 +525,51 @@ export default function WorkoutSession() {
               <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3.5 shadow-sm">
                 <div className="text-m-caption font-bold text-gray-400 mb-1.5">시작할 운동{isSuperset ? ' · 🔗 수퍼세트' : ''}</div>
                 <div className="space-y-2">
-                  {groupLogs.map(l => (
-                    <div key={l.id}>
-                      <div className="text-2xl font-black text-gray-800">{l.exercise}</div>
-                      <div className="text-m-body font-bold text-gray-400">
-                        {l.targetSets}세트 × {l.targetReps}회 × {l.targetWeight ? `${l.targetWeight}kg` : '맨몸'} 목표
+                  {groupLogs.map(l => {
+                    const last = lastSessionInfo(l)
+                    const style = last?.result ? VERDICT_STYLE[last.result.verdict] : null
+                    return (
+                      <div key={l.id}>
+                        <div className="text-2xl font-black text-gray-800">{l.exercise}</div>
+                        <div className="text-m-body font-bold text-gray-400">
+                          {l.targetSets}세트 × {l.targetReps}회 × {kgLabel(l.targetWeight)} 목표
+                        </div>
+                        {/* 지난번 수행 → 평가 → 위 목표가 나온 이유 */}
+                        <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-m-caption leading-relaxed">
+                          {last ? (
+                            <>
+                              <div className="text-gray-400">
+                                지난번 {last.prev.date.slice(5).replace('-', '/')} · {summarizePerformed(last.prev.performedSets)} · 피로도 {last.prev.fatigue ?? '-'}
+                              </div>
+                              {last.result && (
+                                <div className={`font-bold ${style.color}`}>
+                                  {style.icon} {last.result.label}
+                                  <span className="font-normal text-gray-500"> — {last.result.reason}</span>
+                                </div>
+                              )}
+                              {/* 오늘 목표가 이 평가와 다르면(이 기능 이전 기록, 직접 고친 목표 등) 추천 목표를 보여주고, 누르면 적용한다 */}
+                              {last.result && l.routineId && !sameTarget(l, last.result.next) && (
+                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                  <span className="font-bold text-gray-700">
+                                    추천 {last.result.next.sets}세트 × {last.result.next.reps}회 × {kgLabel(last.result.next.weight)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => pushTargets(l, last.result.next, true)}
+                                    className="shrink-0 px-3 min-h-[32px] rounded-full bg-letusBlue text-white font-bold active:bg-blue-600"
+                                  >
+                                    적용
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-gray-400">처음 하는 운동이에요. 자세를 지킬 수 있는 무게로 시작해 보세요.</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
               <button
@@ -648,11 +700,17 @@ export default function WorkoutSession() {
           {progressionNotes.length > 0 && (
             <div className="w-full max-w-sm space-y-1.5 mt-4 text-left">
               {progressionNotes.map((n, i) => (
-                <div key={i} className="flex items-center justify-between text-m-caption font-bold bg-white rounded-lg px-3 py-2.5 border border-gray-100">
-                  <span className="text-gray-700">{n.exercise}</span>
-                  <span className={n.progressed ? 'text-letusBlue' : 'text-gray-400'}>
-                    {n.progressed ? (n.kind === 'reps' ? `다음엔 +${n.delta}회 ↑` : `다음엔 +${n.delta}kg ↑`) : '다음엔 동일 유지'}
-                  </span>
+                <div key={i} className="text-m-caption font-bold bg-white rounded-lg px-3 py-2.5 border border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-700">{n.exercise}</span>
+                    <span className={VERDICT_STYLE[n.verdict].color}>
+                      {VERDICT_STYLE[n.verdict].icon} {n.label}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 font-normal text-gray-400">{n.reason}</div>
+                  <div className="mt-0.5 text-gray-700">
+                    다음 목표 {n.next.sets}세트 × {n.next.reps}회 × {kgLabel(n.next.weight)}
+                  </div>
                 </div>
               ))}
             </div>
