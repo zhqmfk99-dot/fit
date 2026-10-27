@@ -46,6 +46,9 @@ const S = (window.__fitBack ??= {
   setToast: () => {},
 })
 
+// 히스토리 칸의 상태에 "우리가 만든 칸" 표시를 붙인다(라우터의 idx·key·usr 같은 기존 값은 그대로 둔다)
+const withGuard = state => ({ ...(state && typeof state === 'object' ? state : {}), fitGuard: true })
+
 const stateCopy = () => ({ ...(history.state && typeof history.state === 'object' ? history.state : {}), fitGuard: true })
 
 // 트랩을 지금 화면 주소로 맞추고 그 위에 현재 화면 칸을 하나 더 쌓는다
@@ -134,24 +137,27 @@ export function BackNavigationProvider({ children }) {
     S.active = true
     S.setToast = setToast
 
-    // 개발 모드(StrictMode)에서 효과가 두 번 실행돼도 트랩이 중복으로 쌓이지 않게 한 번만 만든다
+    // 개발 모드(StrictMode)에서 효과가 두 번 실행돼도 트랩이 중복으로 쌓이지 않게 한 번만 만든다.
+    // 새로고침(PWA 업데이트로 자동 새로고침될 때도)하면 이 모듈은 다시 로드되지만 브라우저 히스토리는 그대로라서, 지금 칸에 이미 우리 표시(fitGuard)가 있으면
+    // [트랩, 현재 화면]이 남아 있는 것이므로 트랩을 또 쌓지 않는다(안 그러면 새로고침마다 한 칸씩 늘어 메인에서 두 번 눌러도 앱이 종료되지 않는다).
     if (!window.__fitBackGuard) {
       window.__fitBackGuard = true
-      nativePush.call(history, stateCopy(), '', window.location.href)
+      if (!history.state?.fitGuard) nativePush.call(history, stateCopy(), '', window.location.href)
     }
 
     // 화면 이동은 새 칸을 쌓지 않고 제자리 교체로 바꾼다. 단, 트랩만 남은 상태면 새 칸을 쌓아 [트랩, 현재 화면]을 복구한다.
+    // 라우터가 넘기는 상태 객체에도 fitGuard 표시를 남겨야, 이동한 뒤 새로고침해도 "이미 트랩이 있음"을 알아볼 수 있다.
     history.pushState = function (state, title, url) {
       S.navigatedTo = url
       if (S.lonely) {
         disarm()
-        return nativePush.call(history, state, title, url)
+        return nativePush.call(history, withGuard(state), title, url)
       }
-      return nativeReplace.call(history, state, title, url)
+      return nativeReplace.call(history, withGuard(state), title, url)
     }
     history.replaceState = function (state, title, url) {
       S.navigatedTo = url
-      return nativeReplace.call(history, state, title, url)
+      return nativeReplace.call(history, withGuard(state), title, url)
     }
 
     return () => {
