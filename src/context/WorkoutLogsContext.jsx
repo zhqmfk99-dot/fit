@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { supabase } from '../lib/supabase.js'
 import { generateScheduledLogs } from '../lib/scheduleGenerator.js'
 import { applyKcal } from '../lib/calories.js'
+import { createSyncer } from '../lib/persistedSync.js'
 import { unilateralNames } from '../lib/workoutMetrics.js'
 import { useAuth } from './AuthContext.jsx'
 import { useSettings } from './SettingsContext.jsx'
@@ -96,29 +97,18 @@ const bodyRecordToRow = b => ({
   bmr: b.bmr ?? null,
 })
 
-// 이전/다음 상태를 id로 비교해 바뀐 행만 upsert, 사라진 행은 delete 한다.
-async function persistDiff(table, prev, next, toRow) {
-  const prevById = new Map(prev.map(x => [x.id, x]))
-  const nextIds = new Set(next.map(x => x.id))
-  const changed = next.filter(x => JSON.stringify(prevById.get(x.id)) !== JSON.stringify(x))
-  const removedIds = prev.filter(x => !nextIds.has(x.id)).map(x => x.id)
-
-  if (changed.length) {
-    const { error } = await supabase.from(table).upsert(changed.map(toRow))
-    if (error) throw error
-  }
-  if (removedIds.length) {
-    const { error } = await supabase.from(table).delete().in('id', removedIds)
-    if (error) throw error
-  }
-}
-
 // useState처럼 쓸 수 있는(값 또는 함수형 업데이트) setter를 만들되, 변경분을 Supabase에 비동기로 저장한다.
 // 같은 핸들러 안에서 setter를 연달아 불러도 최신 값을 보도록 ref에 동기적으로 반영한다.
 // transform(next, prev): 저장 직전에 값을 다듬는 선택 함수 (운동 기록에 소모 칼로리를 채울 때 쓴다)
-function usePersistedState(table, toRow, queueRef, onError, transform) {
+// 저장은 lib/persistedSync.js: "마지막으로 저장에 성공한 상태 → 지금 상태"의 차이를 올리므로, 저장이 실패해도 다음 시도(run)에서 다시 올라간다.
+// 반환: [상태, setter, replace(서버에서 읽은 값으로 덮어쓰기), retry(실패한 저장을 다시 시도)]
+function usePersistedState(table, toRow, queueRef, onError, onSaved, transform) {
   const [state, setState] = useState([])
   const ref = useRef([])
+  const syncerRef = useRef(null)
+  if (!syncerRef.current) {
+    syncerRef.current = createSyncer({ client: supabase, table, toRow, getTarget: () => ref.current, queue: queueRef, onError, onSaved })
+  }
 
   const set = useCallback(
     updater => {
@@ -127,21 +117,22 @@ function usePersistedState(table, toRow, queueRef, onError, transform) {
       const next = transform ? transform(raw, prev) : raw
       ref.current = next
       setState(next)
-      // 저장 순서가 뒤바뀌지 않도록 하나의 큐에 이어 붙인다
-      queueRef.current = queueRef.current.then(() => persistDiff(table, prev, next, toRow)).catch(onError)
+      syncerRef.current.run() // 저장 순서가 뒤바뀌지 않도록 하나의 큐에 이어 붙인다
     },
-    [table, toRow, queueRef, onError, transform],
+    [transform],
   )
 
-  // 서버에서 읽어온 값으로 덮어쓸 때(저장 없이)
+  // 서버에서 읽어온 값으로 덮어쓸 때(저장 없이) — 그 값을 "저장된 상태"로도 기록한다
   const replace = useCallback(next => {
     ref.current = next
+    syncerRef.current.markPersisted(next)
     setState(next)
   }, [])
 
-  return [state, set, replace]
-}
+  const retry = useCallback(() => syncerRef.current.run(), [])
 
+  return [state, set, replace, retry]
+}
 export function WorkoutLogsProvider({ children }) {
   const queueRef = useRef(Promise.resolve())
   const { user } = useAuth()
@@ -166,11 +157,61 @@ export function WorkoutLogsProvider({ children }) {
     }
   }, [user?.id])
 
-  const handleError = useCallback(e => {
-    console.error(e)
-    setError(e.message || '저장 중 오류가 발생했습니다.')
+  // ── 저장 실패 처리 ─────────────────────────────────────────────
+  // 저장이 실패한 테이블을 기억하고(failedRef), 연결이 돌아오거나 앱이 다시 보일 때, 그리고 일정 간격으로 자동 재시도한다.
+  // 실패한 변경은 "저장된 상태"에 반영되지 않은 채 남아 있어서(lib/persistedSync.js) 재시도하면 그대로 올라간다.
+  const failedRef = useRef(new Set())
+  const [saveFailed, setSaveFailed] = useState(false)
+  const runnersRef = useRef({})
+  const retryRef = useRef({ timer: null, attempt: 0 })
+  const retryNow = useCallback(() => {
+    clearTimeout(retryRef.current.timer)
+    retryRef.current.timer = null
+    for (const table of failedRef.current) runnersRef.current[table]?.()
   }, [])
-
+  const scheduleRetry = useCallback(() => {
+    if (retryRef.current.timer) return
+    const delays = [5000, 15000, 45000, 120000] // 5초 → 15초 → 45초 → 이후 2분마다
+    const delay = delays[Math.min(retryRef.current.attempt, delays.length - 1)]
+    retryRef.current.attempt++
+    retryRef.current.timer = setTimeout(retryNow, delay)
+  }, [retryNow])
+  const handleSaveError = useCallback(
+    (e, table) => {
+      console.error(`${table} 저장 실패`, e)
+      failedRef.current.add(table)
+      setSaveFailed(true)
+      scheduleRetry()
+    },
+    [scheduleRetry],
+  )
+  const handleSaved = useCallback(table => {
+    failedRef.current.delete(table)
+    if (failedRef.current.size === 0) {
+      clearTimeout(retryRef.current.timer)
+      retryRef.current = { timer: null, attempt: 0 }
+      setSaveFailed(false)
+    }
+  }, [])
+  useEffect(() => {
+    const onOnline = () => retryNow()
+    const onVisible = () => document.visibilityState === 'visible' && failedRef.current.size && retryNow()
+    // 저장 못 한 변경이 있는 채로 페이지를 닫으면 그 변경은 사라진다 — 브라우저 확인창으로 한 번 알린다(지원하는 환경에서만)
+    const onBeforeUnload = e => {
+      if (!failedRef.current.size) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      clearTimeout(retryRef.current.timer)
+    }
+  }, [retryNow])
   // 칼로리 계산에 쓰는 체중 출처(신체 기록, 내 정보 체중). setLogs가 저장 직전에 최신 값을 읽도록 ref에 둔다.
   const weightSourceRef = useRef({ bodyRecords: [], profileWeightKg: null })
   // DB에 kcal 칼럼이 아직 없으면(SQL 미실행) 칼로리를 채우지도 저장하지도 않아서 운동 기록 저장이 실패하지 않게 한다.
@@ -190,10 +231,11 @@ export function WorkoutLogsProvider({ children }) {
     if (!unilateralColumnRef.current) delete row.unilateral
     return row
   }, [])
-  const [logs, setLogs, replaceLogs] = usePersistedState('workout_logs', toLogRow, queueRef, handleError, transformLogs)
-  const [routines, setRoutines, replaceRoutines] = usePersistedState('routines', routineToRow, queueRef, handleError)
-  const [exercises, setExercises, replaceExercises] = usePersistedState('exercises', toExerciseRow, queueRef, handleError)
-  const [bodyRecords, setBodyRecords, replaceBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleError)
+  const [logs, setLogs, replaceLogs, retryLogs] = usePersistedState('workout_logs', toLogRow, queueRef, handleSaveError, handleSaved, transformLogs)
+  const [routines, setRoutines, replaceRoutines, retryRoutines] = usePersistedState('routines', routineToRow, queueRef, handleSaveError, handleSaved)
+  const [exercises, setExercises, replaceExercises, retryExercises] = usePersistedState('exercises', toExerciseRow, queueRef, handleSaveError, handleSaved)
+  const [bodyRecords, setBodyRecords, replaceBodyRecords, retryBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleSaveError, handleSaved)
+  runnersRef.current = { workout_logs: retryLogs, routines: retryRoutines, exercises: retryExercises, body_records: retryBodyRecords }
   weightSourceRef.current = { bodyRecords, profileWeightKg, calibration: settings.calorieCalibration, uni: unilateralNames(exercises) }
 
   useEffect(() => {
@@ -255,6 +297,14 @@ export function WorkoutLogsProvider({ children }) {
         <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
           <span>{error}</span>
           <button onClick={() => setError('')}>닫기</button>
+        </div>
+      )}
+      {saveFailed && (
+        <div role="alert" className={`fixed inset-x-0 z-[200] bg-orange-500 text-white text-xs font-bold px-4 py-2 flex items-center justify-between gap-3 ${error ? 'top-8' : 'top-0'}`}>
+          <span>일부 기록을 저장하지 못했어요. 연결이 돌아오면 자동으로 다시 시도해요. (그 전에 앱을 닫으면 사라질 수 있어요)</span>
+          <button type="button" onClick={retryNow} className="shrink-0 px-2.5 py-1 rounded bg-white/20 active:bg-white/30">
+            지금 다시 시도
+          </button>
         </div>
       )}
       {children}

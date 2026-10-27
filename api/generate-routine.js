@@ -356,14 +356,31 @@ async function recordUsage(supabaseUrl, anonKey, token, kind = 'routine') {
   return r.ok ? { ok: true } : { error: await usageError(r) }
 }
 
+// 한도 확인 + 기록을 DB 함수(consume_ai_usage, supabase/ai_usage.sql)가 사용자별 잠금 아래에서 한 번에 처리한다.
+// "조회 → 기록"을 따로 하면 동시에 보낸 요청이 모두 한도 안으로 보여 한도를 넘겨 호출할 수 있다.
+// 반환: { remaining }(이번 호출 뒤 남은 횟수, 한도를 넘었으면 -1) 또는 { error: { status, code } }
+async function consumeUsage(supabaseUrl, anonKey, token, kind, limit) {
+  const r = await fetch(`${supabaseUrl}/rest/v1/rpc/consume_ai_usage`, {
+    method: 'POST',
+    headers: { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_kind: kind, p_limit: limit }),
+  })
+  if (!r.ok) return { error: await usageError(r) }
+  const remaining = await r.json().catch(() => null)
+  return Number.isInteger(remaining) ? { remaining } : { error: { status: r.status, code: 'BAD_RPC' } }
+}
+
 // 사용량 테이블 접근 실패를 사람이 고칠 수 있는 안내로 바꾼다
 function usageProblem(what, e) {
+  // 함수가 없을 때도 HTTP 404라서, 404를 "테이블 없음"으로 보는 조건보다 먼저 확인한다
   const hint =
-    e.code === '42501' || e.status === 401 || e.status === 403
-      ? '권한이 없어요. Supabase SQL Editor에서 supabase/ai_usage.sql을 다시 실행하세요(권한 부여 포함).'
-      : e.code === 'PGRST205' || e.code === '42P01' || e.status === 404
-        ? 'ai_usage 테이블이 없어요. Supabase SQL Editor에서 supabase/ai_usage.sql을 실행하세요.'
-        : 'supabase/ai_usage.sql을 다시 실행해 보세요.'
+    e.code === 'PGRST202' || e.code === '42883'
+      ? '사용량 확인 함수(consume_ai_usage)가 없어요. Supabase SQL Editor에서 supabase/ai_usage.sql을 다시 실행하세요.'
+      : e.code === '42501' || e.status === 401 || e.status === 403
+        ? '권한이 없어요. Supabase SQL Editor에서 supabase/ai_usage.sql을 다시 실행하세요(권한 부여 포함).'
+        : e.code === 'PGRST205' || e.code === '42P01' || e.status === 404
+          ? 'ai_usage 테이블이 없어요. Supabase SQL Editor에서 supabase/ai_usage.sql을 실행하세요.'
+          : 'supabase/ai_usage.sql을 다시 실행해 보세요.'
   console.error(`ai_usage ${what} 실패`, e)
   return `AI 사용량을 ${what}하지 못했어요. ${hint} (원인 코드: HTTP ${e.status}${e.code ? ` / ${e.code}` : ''})`
 }
@@ -520,16 +537,29 @@ export default async function handler(req, res) {
   // 처음 만들기('routine')·수정 요청('refine')·검토('review')는 한도를 따로 센다
   const kind = input.review ? 'review' : input.current ? 'refine' : 'routine'
   const limit = input.review ? REVIEW_DAILY_LIMIT : input.current ? REFINE_DAILY_LIMIT : DAILY_LIMIT
-  const used = await countRecentUsage(supabaseUrl, anonKey, token, kind)
-  if (used.error) return fail(res, 500, usageProblem('확인', used.error))
-  if (used.count >= limit) {
+  const overLimit = () => {
     const what = input.review ? 'AI 루틴 검토' : input.current ? 'AI 수정 요청' : 'AI 사용'
     return fail(res, 429, `하루 ${what} 한도(${limit}회)를 모두 썼어요. 내일 다시 이용해 주세요.`)
   }
-  // 호출 전에 먼저 기록해서, 중간에 실패해도 반복 호출로 비용이 새지 않게 한다
-  const recorded = await recordUsage(supabaseUrl, anonKey, token, kind)
-  if (recorded.error) return fail(res, 500, usageProblem('기록', recorded.error))
-
+  // 호출 전에 먼저 기록해서, 중간에 실패해도 반복 호출로 비용이 새지 않게 한다. 한도 확인과 기록은 한 번에(원자적으로) 처리한다.
+  let remaining
+  const atomic = await consumeUsage(supabaseUrl, anonKey, token, kind, limit)
+  if (atomic.error && (atomic.error.code === 'PGRST202' || atomic.error.code === '42883')) {
+    // SQL을 아직 다시 실행하지 않아 함수가 없다 — AI가 멈추지 않게 예전 방식(조회 → 기록)으로 처리한다. 동시에 보낸 요청에는 취약하니 SQL을 실행해 주세요.
+    console.warn('consume_ai_usage 함수가 없어 조회→기록 방식으로 처리해요. supabase/ai_usage.sql을 다시 실행하세요.')
+    const used = await countRecentUsage(supabaseUrl, anonKey, token, kind)
+    if (used.error) return fail(res, 500, usageProblem('확인', used.error))
+    if (used.count >= limit) return overLimit()
+    const recorded = await recordUsage(supabaseUrl, anonKey, token, kind)
+    if (recorded.error) return fail(res, 500, usageProblem('기록', recorded.error))
+    remaining = Math.max(0, limit - used.count - 1)
+  } else if (atomic.error) {
+    return fail(res, 500, usageProblem('확인', atomic.error))
+  } else if (atomic.remaining < 0) {
+    return overLimit()
+  } else {
+    remaining = atomic.remaining
+  }
   // 응답이 깨졌거나 쓸 수 있는 운동이 없으면 한 번 더 시도한다(사용량은 한 번만 센다). 실패 원인은 서버 로그에 남긴다(응답 내용은 남기지 않음).
   const mode = input.review ? 'review' : input.current ? 'refine' : 'routine'
   const remainingMs = () => TOTAL_BUDGET_MS - (Date.now() - startedAt)
@@ -560,5 +590,5 @@ export default async function handler(req, res) {
     const cut = result.finishReason === 'MAX_TOKENS' ? ' (응답이 길어서 잘렸어요)' : ''
     return fail(res, 502, input.review ? `AI가 검토 결과를 만들지 못했어요${cut}. 잠시 후 다시 시도해 주세요.` : `AI가 올바른 루틴을 만들지 못했어요${cut}. 한 번 더 시도하거나 조건을 바꿔 보세요.`)
   }
-  return res.status(200).json({ ...clean, remaining: Math.max(0, limit - used.count - 1) })
+  return res.status(200).json({ ...clean, remaining })
 }

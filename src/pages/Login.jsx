@@ -144,18 +144,19 @@ export default function Login() {
             </form>
 
             {foundIds && foundIds.length === 0 && <p className="text-xs font-bold text-gray-500">해당 이름으로 가입한 아이디가 없습니다.</p>}
+            {foundIds && foundIds.length > 0 && <p className="text-xs font-bold text-gray-400 leading-relaxed">개인정보 보호를 위해 아이디 일부만 보여 드려요. 로그인·비밀번호 찾기에서 전체 아이디를 입력해 주세요.</p>}
             {foundIds &&
-              foundIds.map(id => (
-                <div key={id} className="border border-gray-200 rounded-xl p-4 space-y-3">
+              foundIds.map((id, i) => (
+                <div key={i} className="border border-gray-200 rounded-xl p-4 space-y-3">
                   <div>
                     <p className="text-[11px] font-bold text-gray-400">아이디</p>
-                    <p className="text-sm font-black text-gray-800 break-all">{id}</p>
+                    <p className="text-sm font-black text-gray-800 break-all">{maskId(id)}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => go('signin', id)} className="flex-1 bg-letusBlue text-white text-xs font-black rounded-lg py-2">
+                    <button type="button" onClick={() => go('signin')} className="flex-1 bg-letusBlue text-white text-xs font-black rounded-lg py-2">
                       로그인하기
                     </button>
-                    <button type="button" onClick={() => go('findPw', id)} className="flex-1 border border-gray-200 text-gray-600 text-xs font-black rounded-lg py-2 hover:border-letusBlue hover:text-letusBlue">
+                    <button type="button" onClick={() => go('findPw')} className="flex-1 border border-gray-200 text-gray-600 text-xs font-black rounded-lg py-2 hover:border-letusBlue hover:text-letusBlue">
                       비밀번호 찾기
                     </button>
                   </div>

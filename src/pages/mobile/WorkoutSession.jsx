@@ -12,6 +12,8 @@ import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMe
 import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
 import { formatDuration } from '../../lib/workoutTime.js'
+import { useAuth } from '../../context/AuthContext.jsx'
+import { draftKey, saveDraft, loadDraft, clearDraft, pruneOldDrafts, draftSummary, resumeStepIndex } from '../../lib/sessionDraft.js'
 import { evaluateSession, applyNextToPlan, findPrevLog, findPrevLogs, summarizePerformed } from '../../lib/progression.js'
 
 // 평가 결과(올리기/유지/낮추기)에 따른 글자색·기호
@@ -182,6 +184,16 @@ export default function WorkoutSession() {
   const [subPhase, setSubPhase] = useState('ready')
   const [stepCursor, setStepCursor] = useState(0)
   const [performedByLog, setPerformedByLog] = useState({})
+  // 임시 저장(lib/sessionDraft.js): 세트를 끝내거나 고칠 때마다 이 기기에 저장해 두고, 앱이 중간에 종료·새로고침됐을 때 이어서 할 수 있게 한다.
+  // 이어서 할지 정하기 전(pendingDraft가 있는 동안)에는 기존 임시 저장을 덮어쓰지 않는다.
+  const { user } = useAuth()
+  const draftStorageKey = draftKey(user?.id, routineId, date)
+  const [pendingDraft, setPendingDraft] = useState(() => {
+    pruneOldDrafts()
+    return loadDraft(draftStorageKey, logs)
+  })
+  const resumeRef = useRef(null)
+  const applyResumeRef = useRef(null)
   const [setForm, setSetForm] = useState(null)
   const [setStartAt, setSetStartAt] = useState(null)
   const [pendingRestBefore, setPendingRestBefore] = useState(null)
@@ -210,8 +222,26 @@ export default function WorkoutSession() {
     setEditing(false)
     setEditForm(null)
     reviewEnteredAtRef.current = null
+    applyResumeRef.current?.() // 이어서 하기로 다른 그룹에 들어온 경우: 초기화한 뒤 임시 저장한 지점부터 다시 채운다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupIdx])
+
+  // 세트 기록이 바뀔 때마다 임시 저장한다(끝난 운동은 빼고, 남는 게 없으면 지움)
+  useEffect(() => {
+    if (pendingDraft) {
+      // 이어서 할지 고르지 않고 새 운동을 시작했다면 옛 임시 저장은 버린 것으로 본다
+      if (subPhase === 'active') {
+        clearDraft(draftStorageKey)
+        setPendingDraft(null)
+      }
+      return
+    }
+    const active = {}
+    for (const [id, sets] of Object.entries(performedByLog)) {
+      if (sets.length && !logs.find(l => l.id === id)?.isCompleted) active[id] = sets
+    }
+    saveDraft(draftStorageKey, active)
+  }, [performedByLog, logs, pendingDraft, subPhase, draftStorageKey])
 
   // 휴식 카운트다운: 1초 타이머를 세는 대신 종료 시각과 현재 시각의 차이를 주기적으로 계산한다.
   // (setTimeout 방식은 폰 화면이 꺼지거나 앱이 백그라운드로 가면 느려지거나 멈춘다)
@@ -292,8 +322,35 @@ export default function WorkoutSession() {
     setSubPhase('active')
   }
 
-  // ── 끝낸 세트 보기·수정 ─────────────────────────────────────────
-  // 이미 끝낸 세트의 기록은 performedByLog에 있고, 이 운동의 마지막 세트를 끝낼 때 한꺼번에 저장된다.
+  // ── 임시 저장한 세트 기록 이어서 하기 ─────────────────────────────
+  // 이어서 할 그룹으로 이동(필요하면)한 뒤, 기록된 세트를 채우고 아직 안 한 첫 세트부터 시작한다.
+  // 그룹이 바뀌면 위의 초기화 effect가 진행 상태를 비우므로, 그 뒤에 이 함수가 다시 채우도록 resumeRef에 담아 둔다.
+  const applyResume = () => {
+    const draft = resumeRef.current
+    resumeRef.current = null
+    if (!draft) return
+    const idx = resumeStepIndex(flatSteps, draft.performedByLog)
+    if (idx === -1) return
+    startStep(idx, null)
+    setPerformedByLog(draft.performedByLog)
+  }
+  applyResumeRef.current = applyResume
+  const discardDraft = () => {
+    clearDraft(draftStorageKey)
+    setPendingDraft(null)
+  }
+  const resumeDraft = () => {
+    if (!pendingDraft) return
+    const ids = Object.keys(pendingDraft.performedByLog)
+    const gi = groups.findIndex(g => g.some(id => ids.includes(id)))
+    if (gi === -1) return discardDraft()
+    resumeRef.current = pendingDraft
+    setPendingDraft(null)
+    if (gi === groupIdx) applyResume()
+    else setGroupIdx(gi)
+  }
+
+  // ── 끝낸 세트 보기·수정 ─────────────────────────────────────────  // 이미 끝낸 세트의 기록은 performedByLog에 있고, 이 운동의 마지막 세트를 끝낼 때 한꺼번에 저장된다.
   // 그래서 여기서 고친 값이 그대로 저장·피로도·칼로리 계산에 쓰인다.
   const doneSets = currentLog ? performedByLog[currentLog.id] || [] : []
   const openFinishedSet = i => {
@@ -455,7 +512,7 @@ export default function WorkoutSession() {
   // 종료(X): 세트 진행·휴식 중에 누르면 그 운동의 진행 내용이 사라지므로 한 번 확인한다.
   // (이미 끝낸 운동은 저장되어 있다 — 운동 하나의 마지막 세트를 끝낼 때 기록된다)
   const handleExit = () => {
-    if ((subPhase === 'active' || subPhase === 'rest') && !confirm('운동을 종료할까요?\n진행 중인 운동의 세트 기록은 저장되지 않습니다.\n(이미 끝낸 운동은 저장되어 있습니다.)')) return
+    if ((subPhase === 'active' || subPhase === 'rest') && !confirm('운동을 종료할까요?\n진행 중인 운동의 세트 기록은 이 기기에 임시 저장돼서, 다시 들어오면 이어서 할 수 있어요.\n(이미 끝낸 운동은 저장되어 있습니다.)')) return
     navigate(LOG_PATH)
   }
   exitRef.current = handleExit
@@ -495,6 +552,21 @@ export default function WorkoutSession() {
 
       {subPhase === 'ready' && (
         <div className="flex-1 flex flex-col max-w-sm w-full mx-auto px-5 pb-6 gap-4 min-h-0">
+          {/* 앱이 중간에 종료·새로고침돼서 임시 저장된 세트 기록이 있으면 이어서 할지 묻는다 */}
+          {pendingDraft && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 space-y-2">
+              <div className="text-m-body font-bold text-orange-800">하던 운동 기록이 있어요</div>
+              <div className="text-m-caption text-orange-700 leading-relaxed">{draftSummary(pendingDraft, logs).map(d => `${d.exercise} ${d.sets}세트 완료`).join(' · ')}</div>
+              <div className="flex gap-2">
+                <button type="button" onClick={resumeDraft} className="flex-1 min-h-[40px] rounded-lg bg-letusBlue text-white text-m-body font-bold active:bg-blue-600">
+                  이어서 하기
+                </button>
+                <button type="button" onClick={discardDraft} className="px-4 min-h-[40px] rounded-lg border border-orange-300 text-orange-700 text-m-body font-bold active:bg-orange-100">
+                  버리기
+                </button>
+              </div>
+            </div>
+          )}
           {/* 오늘 운동 전체 목록 — 누르면 시작할 운동이 바뀐다. 이미 끝낸 운동은 선택할 수 없다. 수퍼세트는 한 묶음으로 선택된다. */}
           <div className="min-h-0 flex flex-col">
             <div className="flex items-baseline justify-between mb-2 px-1">
