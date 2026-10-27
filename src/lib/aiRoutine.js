@@ -3,7 +3,7 @@
 // AI는 운동 id·세트·횟수·휴식만 정한다. 무게는 AI가 정하지 않고, 내가 전에 한 기록이 있으면 그 무게를 쓴다(없으면 비워 둔다).
 
 import { supabase } from './supabase.js'
-import { MUSCLE_LABELS } from './muscleMap.js'
+import { MUSCLE_LABELS, UPPER_BODY_MUSCLES, LOWER_BODY_MUSCLES } from './muscleMap.js'
 import { calcBmi } from './bodyMetrics.js'
 
 export const AI_GOALS = ['근비대', '근력', '체지방 감량', '체력 유지']
@@ -13,6 +13,14 @@ export const AI_MINUTES = [30, 45, 60, 90]
 export const AI_NOTES_MAX = 200
 
 export const AI_MAX_INCLUDE = 5
+export const AI_MIN_CANDIDATES = 4 // 후보 운동이 이보다 적으면 루틴을 만들 수 없다고 보고 호출하지 않는다
+
+// 세부 부위 선택지(상체/하체로 묶어서 보여준다). 값은 운동 리스트의 근육 슬러그, 화면에는 한글 이름.
+export const AI_MUSCLE_GROUPS = [
+  { label: '상체', muscles: UPPER_BODY_MUSCLES },
+  { label: '하체', muscles: LOWER_BODY_MUSCLES },
+]
+export const muscleLabel = slug => MUSCLE_LABELS[slug] ?? slug
 const HISTORY_DAYS = 90
 const RECENT_DAYS = 28
 const MIN_RECENT_SESSIONS = 3 // 최근 4주에 운동한 날이 이보다 적으면 "적게 한 부위"를 판단할 근거가 부족하다
@@ -26,11 +34,16 @@ const NEGLECT_PRIORITY = [
 ]
 
 // 서버로 보낼 운동 목록: 고른 장비로 거르고, 빼고 싶은 운동은 제외한다(아무것도 안 골랐으면 전체). 장비 정보가 없는 운동은 항상 포함.
-// 꼭 넣을 운동은 장비 선택과 상관없이 항상 목록에 둔다.
-export function buildCatalogPayload(exercises, equipment, avoidIds = [], includeIds = []) {
+// 세부 부위(muscleSlugs)를 골랐으면 그 부위를 하나라도 쓰는 운동만 남긴다(하드 필터).
+// 꼭 넣을 운동은 장비·부위 선택과 상관없이 항상 목록에 둔다.
+export function buildCatalogPayload(exercises, equipment, avoidIds = [], includeIds = [], muscleSlugs = []) {
   return exercises
     .filter(e => !avoidIds.includes(e.id))
-    .filter(e => includeIds.includes(e.id) || !equipment.length || !e.equipment || equipment.includes(e.equipment))
+    .filter(
+      e =>
+        includeIds.includes(e.id) ||
+        ((!equipment.length || !e.equipment || equipment.includes(e.equipment)) && (!muscleSlugs.length || (e.muscles || []).some(m => muscleSlugs.includes(m)))),
+    )
     .map(e => ({
       id: e.id,
       name: e.name,
@@ -117,14 +130,26 @@ export async function requestRoutineDraft(conditions, exercises, extra = {}) {
   const token = data.session?.access_token
   if (!token) throw new Error('로그인이 필요합니다.')
 
+  // 장비·부위·빼고 싶은 운동을 반영한 후보 목록. 너무 적으면 호출하지 않는다(호출 한도·비용 낭비 방지).
+  const slugs = conditions.muscles || []
+  const catalog = buildCatalogPayload(exercises, conditions.equipment || [], extra.avoid || [], extra.include || [], slugs)
+  if (catalog.length < AI_MIN_CANDIDATES) {
+    throw new Error(`조건에 맞는 운동이 ${catalog.length}개뿐이라 루틴을 만들기 어려워요. 장비나 세부 부위를 넓히거나, 운동 리스트에 운동을 더 등록해 주세요.`)
+  }
+
   let res
   try {
     res = await fetch('/api/generate-routine', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        ...conditions,
-        exercises: buildCatalogPayload(exercises, conditions.equipment || [], extra.avoid || [], extra.include || []),
+        goal: conditions.goal,
+        level: conditions.level,
+        minutes: conditions.minutes,
+        focus: conditions.focus,
+        muscles: slugs.map(muscleLabel),
+        notes: conditions.notes,
+        exercises: catalog,
         include: extra.include || [],
         history: extra.history || null,
         body: extra.body || null,

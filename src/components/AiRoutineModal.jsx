@@ -4,7 +4,9 @@ import { useAiRoutine } from '../hooks/useAiRoutine.js'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
 import { buildTagIndex, matchesQuery } from '../lib/exerciseSearch.js'
-import { AI_GOALS, AI_LEVELS, AI_FOCUS, AI_MINUTES, AI_NOTES_MAX, AI_MAX_INCLUDE } from '../lib/aiRoutine.js'
+import {
+  AI_GOALS, AI_LEVELS, AI_FOCUS, AI_MINUTES, AI_NOTES_MAX, AI_MAX_INCLUDE, AI_MIN_CANDIDATES, AI_MUSCLE_GROUPS, muscleLabel, buildCatalogPayload,
+} from '../lib/aiRoutine.js'
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
 const MAX_AVOID = 20
@@ -142,7 +144,9 @@ export default function AiRoutineModal({ onClose, onDraft }) {
   const [goal, setGoal] = useState(AI_GOALS[0])
   const [level, setLevel] = useState(AI_LEVELS[0])
   const [minutes, setMinutes] = useState(60)
-  const [focus, setFocus] = useState(AI_FOCUS[0])
+  const [focus, setFocus] = useState(['전신'])
+  const [muscles, setMuscles] = useState([]) // 세부 부위(선택) — 고르면 그 부위를 쓰는 운동만 후보가 된다
+  const [showMuscles, setShowMuscles] = useState(false)
   const [equipment, setEquipment] = useState([])
   const [include, setInclude] = useState([])
   const [avoid, setAvoid] = useState([])
@@ -156,8 +160,19 @@ export default function AiRoutineModal({ onClose, onDraft }) {
     savePrefs(next)
   }
 
+  // 집중 부위: 여러 개 고를 수 있다. "전신"은 다른 부위와 같이 고르지 않고(고르면 나머지 해제), 전부 해제하면 전신으로 돌아간다.
+  const handleFocus = next => {
+    const added = next.find(f => !focus.includes(f))
+    if (added === '전신') return setFocus(['전신'])
+    const rest = next.filter(f => f !== '전신')
+    setFocus(rest.length ? rest : ['전신'])
+  }
+
+  // 지금 조건(장비·부위·빼고 싶은/꼭 넣을 운동)에 맞는 후보 운동 수 — 너무 적으면 미리 알려 준다
+  const candidateCount = useMemo(() => buildCatalogPayload(catalog, equipment, avoid, include, muscles).length, [catalog, equipment, avoid, include, muscles])
+
   const handleSubmit = async () => {
-    const draft = await generate({ goal, level, minutes, focus, equipment, notes: notes.trim() }, repeatDays, {
+    const draft = await generate({ goal, level, minutes, focus, muscles, equipment, notes: notes.trim() }, repeatDays, {
       include,
       avoid,
       useHistory: prefs.useHistory,
@@ -202,9 +217,39 @@ export default function AiRoutineModal({ onClose, onDraft }) {
           <Field label="운동 시간">
             <Pills options={AI_MINUTES} value={minutes} onChange={setMinutes} format={m => `${m}분`} />
           </Field>
-          <Field label="집중 부위">
-            <Pills options={AI_FOCUS} value={focus} onChange={setFocus} />
+          <Field label="집중 부위" hint="여러 개 선택 가능">
+            <Pills options={AI_FOCUS} value={focus} onChange={handleFocus} multi />
           </Field>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setShowMuscles(v => !v)}
+              aria-expanded={showMuscles}
+              className="self-start text-m-body font-bold text-letusBlue min-h-[32px]"
+            >
+              {showMuscles ? '− 세부 부위 접기' : '+ 세부 부위 직접 고르기'}
+              {muscles.length > 0 && ` (${muscles.length}개 선택)`}
+            </button>
+            {!showMuscles && muscles.length > 0 && <span className="text-m-caption text-gray-500">{muscles.map(muscleLabel).join(', ')}</span>}
+            {showMuscles && (
+              <div className="space-y-3 bg-white border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-m-caption text-gray-400 leading-relaxed">고른 부위를 쓰는 운동만 후보가 돼요.</span>
+                  {muscles.length > 0 && (
+                    <button type="button" onClick={() => setMuscles([])} className="shrink-0 text-m-caption font-bold text-gray-500 underline">
+                      모두 해제
+                    </button>
+                  )}
+                </div>
+                {AI_MUSCLE_GROUPS.map(g => (
+                  <div key={g.label} className="flex flex-col gap-1.5">
+                    <span className="text-m-caption font-bold text-gray-500">{g.label}</span>
+                    <Pills options={g.muscles} value={muscles} onChange={setMuscles} multi format={muscleLabel} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <Field label="사용할 장비" hint="아무것도 안 고르면 전체">
             <Pills options={EQUIPMENT_OPTIONS} value={equipment} onChange={setEquipment} multi />
           </Field>
@@ -222,6 +267,10 @@ export default function AiRoutineModal({ onClose, onDraft }) {
           <Field label="빼고 싶은 운동" hint="선택 · 싫어하거나 못 하는 운동">
             <ExercisePicker ids={avoid} onChange={setAvoid} catalog={catalog} tagsByName={tagsByName} blockedIds={include} max={MAX_AVOID} placeholder="운동 이름 검색" tone="avoid" />
           </Field>
+          <div className={`text-m-caption font-bold ${candidateCount < AI_MIN_CANDIDATES ? 'text-red-500' : 'text-gray-500'}`}>
+            조건에 맞는 운동 {candidateCount}개
+            {candidateCount < AI_MIN_CANDIDATES && ` — ${AI_MIN_CANDIDATES}개 이상이어야 만들 수 있어요. 장비나 세부 부위를 넓혀 보세요.`}
+          </div>
           <Field label="반복 요일" hint="선택">
             <Pills options={DAYS} value={repeatDays} onChange={setRepeatDays} multi />
           </Field>

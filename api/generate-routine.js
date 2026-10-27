@@ -34,7 +34,7 @@ const SYSTEM_PROMPT = `너는 웨이트 트레이닝 루틴을 짜는 보조자�
 - 목표별 반복수: 근력 3~6회, 근비대 8~12회, 체지방 감량·체력 유지 12~15회. 세트는 2~5개(초보는 2~3개).
 - 휴식(초): 복합관절 90~180, 단관절 45~90. 근력 목표는 길게.
 - 수퍼세트(linkedToNext=true)는 서로 반대 근육을 쓰는 인접한 두 운동에만, 꼭 필요할 때만 쓴다. 마지막 운동은 항상 false.
-- 선택한 집중 부위에 맞는 운동 위주로 고른다.
+- 선택한 집중 부위에 맞는 운동 위주로 고른다. 집중 부위가 여러 개면 비중을 나눠 고르게 배분하고, 세부 부위가 지정되면 그 부위들을 골고루 다룬다.
 - 부상·통증·질환 이야기가 메모에 있어도 진단·처방은 하지 않는다. 해당 부위에 부담이 큰 운동을 피하고, summary에 전문가 상담을 권하는 한 문장을 넣는다.
 - "꼭 넣을 운동"이 있으면 그 운동은 반드시 포함한다. 목록에 없는 운동은 만들지 않는다.
 - "자주 한 운동"은 사용자가 좋아하는 운동이다. 같은 운동만 반복하지 않는 선에서 우선 고려한다.
@@ -75,9 +75,12 @@ function parseInput(body) {
   if (!body || typeof body !== 'object') return null
   const goal = GOALS.includes(body.goal) ? body.goal : null
   const level = LEVELS.includes(body.level) ? body.level : null
-  const focus = FOCUS.includes(body.focus) ? body.focus : null
+  // 집중 부위: 여러 개 가능(예전 형식인 문자열 하나도 받는다)
+  const focus = [...new Set((Array.isArray(body.focus) ? body.focus : [body.focus]).filter(f => FOCUS.includes(f)))]
   const minutes = MINUTES.includes(Number(body.minutes)) ? Number(body.minutes) : null
-  if (!goal || !level || !focus || !minutes) return null
+  if (!goal || !level || !focus.length || !minutes) return null
+  // 세부 부위(선택): 클라이언트가 이 부위를 쓰는 운동만 후보로 보내므로, 여기서는 프롬프트에 알려주는 용도
+  const muscles = Array.isArray(body.muscles) ? [...new Set(body.muscles.map(m => str(m, 10)).filter(Boolean))].slice(0, 12) : []
   if (!Array.isArray(body.exercises)) return null
 
   const exercises = body.exercises
@@ -118,7 +121,7 @@ function parseInput(body) {
     if (Object.values(b).some(v => v != null)) bodyInfo = b
   }
 
-  return { goal, level, focus, minutes, notes: str(body.notes, 200), exercises, include, history, body: bodyInfo }
+  return { goal, level, focus, muscles, minutes, notes: str(body.notes, 200), exercises, include, history, body: bodyInfo }
 }
 
 function buildUserPrompt(input) {
@@ -131,8 +134,9 @@ function buildUserPrompt(input) {
     `목표: ${input.goal}`,
     `경력: ${input.level}`,
     `운동 시간: ${input.minutes}분 (운동은 최대 ${maxCount}개)`,
-    `집중 부위: ${input.focus}`,
+    `집중 부위: ${input.focus.join(', ')}`,
   ]
+  if (input.muscles.length) lines.push(`세부 부위(아래 목록은 이 부위를 쓰는 운동만 남긴 것): ${input.muscles.join(', ')}`)
   if (input.include.length) lines.push(`꼭 넣을 운동: ${input.include.map(id => `${nameOf(id)}(${id})`).join(', ')}`)
   if (input.history?.frequent.length) lines.push(`자주 한 운동(선호): ${input.history.frequent.map(nameOf).join(', ')}`)
   if (input.history?.neglected.length) lines.push(`최근 4주간 적게 한 부위: ${input.history.neglected.join(', ')}`)
