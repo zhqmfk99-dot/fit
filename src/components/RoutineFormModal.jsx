@@ -1,4 +1,5 @@
 import AiRefineBox from './AiRefineBox.jsx'
+import AiReviewBox from './AiReviewBox.jsx'
 import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useState, useMemo } from 'react'
 import { GripVertical } from 'lucide-react'
@@ -61,6 +62,13 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
   // 반복을 직접 바꾸면 앱이 맨몸 운동에 올려 둔 지금 목표 횟수(progressReps)는 버리고 입력한 값부터 다시 시작한다
   const updateExercise = (idx, field, value) =>
     setExercises(prev => prev.map((e, i) => (i === idx ? { ...e, [field]: value, ...(field === 'reps' ? { progressReps: undefined } : {}) } : e)))
+
+  // AI 검토가 제안한 운동으로 바꾼다(그 운동이 있는 첫 행만, 세트·횟수·휴식은 그대로)
+  const replaceExercise = (oldName, patch) =>
+    setExercises(prev => {
+      const idx = prev.findIndex(e => e.exercise?.trim() === oldName)
+      return idx === -1 ? prev : prev.map((e, i) => (i === idx ? { ...e, ...patch } : e))
+    })
 
   // 무게가 필요한 운동(맨몸이 아닌 장비)인데 무게가 비어 있으면 true — 비우면 0kg로 저장돼 "맨몸 운동"으로 기록되기 때문이다
   const needsWeight = ex => {
@@ -343,6 +351,8 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
               + 운동 추가
             </button>
           </div>
+
+          <AiReviewBox rows={exercises} request={draft?.request} onReplace={replaceExercise} />
         </div>
 
         <div className="p-4 border-t border-gray-200 bg-white flex justify-end gap-2">

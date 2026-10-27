@@ -143,33 +143,55 @@ export async function requestRoutineDraft(conditions, exercises, extra = {}) {
     throw new Error(`조건에 맞는 운동이 ${catalog.length}개뿐이라 루틴을 만들기 어려워요. 장비나 세부 부위를 넓히거나, 운동 리스트에 운동을 더 등록해 주세요.`)
   }
 
+  return postToAi(token, {
+    goal: conditions.goal,
+    level: conditions.level,
+    minutes: conditions.minutes,
+    focus: conditions.focus,
+    muscles: slugs.map(muscleLabel),
+    notes: conditions.notes,
+    exercises: catalog,
+    include: extra.include || [],
+    current: extra.current || undefined,
+    instruction: extra.instruction || undefined,
+    history: extra.history || null,
+    body: extra.body || null,
+  }, 'AI 루틴 생성에 실패했어요.')
+}
+
+// 서버 함수(/api/generate-routine)에 요청을 보내고 JSON을 돌려준다. 실패하면 화면에 보일 문구로 던진다.
+async function postToAi(token, payload, failMessage) {
   let res
   try {
     res = await fetch('/api/generate-routine', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        goal: conditions.goal,
-        level: conditions.level,
-        minutes: conditions.minutes,
-        focus: conditions.focus,
-        muscles: slugs.map(muscleLabel),
-        notes: conditions.notes,
-        exercises: catalog,
-        include: extra.include || [],
-        current: extra.current || undefined,
-        instruction: extra.instruction || undefined,
-        history: extra.history || null,
-        body: extra.body || null,
-      }),
+      body: JSON.stringify(payload),
     })
   } catch {
     throw new Error('서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.')
   }
   const json = await res.json().catch(() => null)
   if (!json) throw new Error('서버 응답을 읽지 못했어요. 잠시 후 다시 시도해 주세요.')
-  if (!res.ok) throw new Error(json.error || 'AI 루틴 생성에 실패했어요.')
+  if (!res.ok) throw new Error(json.error || failMessage)
   return json
+}
+
+// ── 루틴 검토(내가 고른 운동이 적절한지 AI가 판정) ─────────────────
+
+export const REVIEW_MAX_EXERCISES = 12 // 서버(MAX_CURRENT)와 같아야 한다
+
+// conditions: { goal, level, focus, equipment }(모두 선택) / current: currentForRefine()의 결과
+// 대체 운동 후보는 운동 리스트에서 쓸 수 있는 장비로 거른 목록이다(현재 루틴의 운동은 장비와 상관없이 포함). 현재 루틴 운동을 앞에 둔다.
+export async function requestRoutineReview(conditions, exercises, current) {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) throw new Error('로그인이 필요합니다.')
+  const ids = current.map(c => c.id)
+  const catalog = buildCatalogPayload(exercises, conditions.equipment || [], [], ids, [])
+  catalog.sort((a, b) => Number(ids.includes(b.id)) - Number(ids.includes(a.id)))
+  if (catalog.length < 3) throw new Error('비교할 운동이 부족해요. 운동 리스트에 운동을 더 등록하거나 장비 선택을 넓혀 주세요.')
+  return postToAi(token, { review: true, goal: conditions.goal || undefined, level: conditions.level || undefined, focus: conditions.focus || [], exercises: catalog, current }, 'AI 루틴 검토에 실패했어요.')
 }
 
 // 서버 결과 → 루틴 등록 화면에 채울 초안. (id가 운동 리스트에 없으면 버린다)
