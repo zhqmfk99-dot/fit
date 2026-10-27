@@ -11,8 +11,9 @@ export const AI_MAX_GOALS = 3 // 목표는 여러 개 고를 수 있다(서버 M
 // 조건 객체에서 목표 배열을 꺼낸다(예전 형식인 단일 `goal`도 받는다)
 export const goalsOf = conditions => (Array.isArray(conditions?.goals) ? conditions.goals : conditions?.goal ? [conditions.goal] : [])
 export const AI_LEVELS = ['초보', '중급', '상급']
-// 큰 분류. 상체는 밀기·당기기를 포함하므로 겹쳐 고르면 중복이 된다(여러 개 선택은 허용). 더 구체적으로 정하려면 "세부 부위"를 쓴다.
-export const AI_FOCUS = ['전신', '상체', '하체', '밀기(가슴·어깨·삼두)', '당기기(등·이두)', '어깨', '팔(이두·삼두)', '코어']
+// 집중 부위: 부위별 분할(예: 등+어깨 / 팔 / 가슴+하체)로 고르기 쉽게 부위 단위로 둔다. 상체·하체는 큰 분류라 부위와 겹쳐 고르면 중복이 된다(여러 개 선택은 허용).
+// 더 구체적으로 정하려면 "세부 부위"(고른 부위를 쓰는 운동만 후보로 보냄)를 쓴다. 서버 FOCUS와 같아야 한다.
+export const AI_FOCUS = ['전신', '상체', '하체', '가슴', '등', '어깨', '팔(이두·삼두·전완)', '코어']
 export const AI_MINUTES = [30, 45, 60, 90]
 export const AI_NOTES_MAX = 200
 export const AI_INSTRUCTION_MAX = 200
