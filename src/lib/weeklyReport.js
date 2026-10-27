@@ -51,7 +51,7 @@ function summarizePeriod(logs, exercises, from, to) {
   for (const l of inRange) {
     const n = l.performedSets.length
     sets += n
-    volume += l.performedSets.reduce((a, s) => a + (s.reps || 0) * (s.weight || 0), 0)
+    volume += l.performedSets.reduce((a, s) => a + (s.reps || 0) * (s.weight || 0), 0) * (byName.get(l.exercise)?.unilateral ? 2 : 1) // 한쪽씩 하는 운동은 양쪽 볼륨
     kcal += l.kcal || 0
     const groups = new Set((byName.get(l.exercise)?.muscles || []).map(m => GROUP_OF[m]).filter(Boolean))
     groups.forEach(g => (groupSets[g] += n))

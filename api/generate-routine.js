@@ -43,6 +43,7 @@ const SYSTEM_PROMPT = `너는 웨이트 트레이닝 루틴을 짜는 보조자�
 규칙:
 - 운동은 반드시 목록에 있는 id(목록의 첫 열, E1·E2처럼 생긴 코드)만 쓴다. id는 목록에 적힌 그대로 베끼고, 목록에 없는 운동이나 id를 만들지 않는다.
 - 같은 운동을 두 번 넣지 않는다. 운동 수는 요청된 최대 개수 이하로 한다.
+- 유형에 "한쪽씩"이 붙은 운동(예: 불가리안 스플릿 스쿼트, 원암 덤벨 로우)은 반복수가 **한쪽 기준**이고 세트는 양쪽을 모두 한 것이다. 양쪽을 하느라 시간이 두 배 걸리므로, 운동 시간 대비 운동 개수와 세트 수를 그만큼 줄인다.
 - 순서: 큰 근육을 쓰는 복합관절 운동을 앞에, 단관절·고립·코어 운동을 뒤에 둔다.
 - 목표별 반복수: 근력 3~6회, 근비대 8~12회, 체지방 감량·체력 유지 12~15회. 세트는 2~5개(초보는 2~3개).
 - 휴식(초): 복합관절 90~180, 단관절 45~90. 근력 목표는 길게.
@@ -153,6 +154,9 @@ const resolveId = (input, raw) => {
   return byCode.get(v.toUpperCase()) ?? (byId.has(v) ? v : null)
 }
 
+// 목록의 "유형" 칸: 한쪽씩 하는 운동은 표시를 덧붙인다(예: 복합관절·한쪽씩)
+const typeCol = e => (e.unilateral ? `${e.type ? `${e.type}·` : ''}한쪽씩` : e.type)
+
 // 사용 가능한 운동 목록 정리(이상한 항목은 버린다)
 function parseCatalog(list) {
   if (!Array.isArray(list)) return []
@@ -165,6 +169,7 @@ function parseCatalog(list) {
       equipment: str(e?.equipment, 20),
       pattern: str(e?.pattern, 10),
       type: str(e?.type, 10),
+      unilateral: e?.unilateral === true,
     }))
     .filter(e => e.id && e.name)
 }
@@ -258,7 +263,7 @@ function maxExercises(input) {
 function buildUserPrompt(input) {
   const maxCount = maxExercises(input)
   const list = input.exercises
-    .map(e => [codeOf(input, e.id), e.name, e.muscles.join('/'), e.equipment, e.pattern, e.type].join(' | '))
+    .map(e => [codeOf(input, e.id), e.name, e.muscles.join('/'), e.equipment, e.pattern, typeCol(e)].join(' | '))
     .join('\n')
   const nameOf = id => input.exercises.find(e => e.id === id)?.name
   const lines = [
@@ -301,7 +306,7 @@ ${list}${refine}`
 function buildReviewPrompt(input) {
   const currentIds = new Set(input.current.map(c => c.id))
   const byId = new Map(input.exercises.map(e => [e.id, e]))
-  const describe = e => [codeOf(input, e.id), e.name, e.muscles.join('/'), e.equipment, e.pattern, e.type].join(' | ')
+  const describe = e => [codeOf(input, e.id), e.name, e.muscles.join('/'), e.equipment, e.pattern, typeCol(e)].join(' | ')
   const lines = [`목표: ${input.goals.length ? input.goals.join(' + ') : '지정 안 함'}`, `경력: ${input.level || '지정 안 함'}`, `집중 부위: ${input.focus.length ? input.focus.join(', ') : '지정 안 함'}`]
   const current = input.current.map(c => `${describe(byId.get(c.id))} | ${c.sets}×${c.reps}${c.linkedToNext ? ' | 다음 운동과 수퍼세트' : ''}`).join('\n')
   const options = input.exercises.filter(e => !currentIds.has(e.id)).map(describe).join('\n')

@@ -21,9 +21,14 @@ export function avgWeight(log) {
   return log.targetWeight || 0
 }
 
-export function totalVolume(log) {
+// 한쪽씩 하는 운동(운동 리스트의 unilateral 표시)은 횟수를 한쪽 기준으로 적는다. 볼륨·시간을 셀 때는 양쪽(×2)으로 본다.
+// uni: 한쪽씩 하는 운동 이름들의 Set (unilateralNames로 만든다). 없으면 모든 운동을 양쪽 동시 운동으로 본다.
+export const unilateralNames = exercises => new Set((exercises || []).filter(e => e.unilateral).map(e => e.name))
+export const sideFactor = (log, uni) => (uni?.has(log.exercise) ? 2 : 1)
+
+export function totalVolume(log, uni) {
   if (!log.performedSets?.length) return 0
-  return log.performedSets.reduce((sum, s) => sum + s.reps * s.weight, 0)
+  return log.performedSets.reduce((sum, s) => sum + s.reps * s.weight, 0) * sideFactor(log, uni)
 }
 
 // 같은 운동을 과거에 완료한 기록들 중 가장 무거웠던 무게 — 이번 세트가 "얼마나 힘든 강도였는지" 판단 기준.

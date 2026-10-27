@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { supabase } from '../lib/supabase.js'
 import { generateScheduledLogs } from '../lib/scheduleGenerator.js'
 import { applyKcal } from '../lib/calories.js'
+import { unilateralNames } from '../lib/workoutMetrics.js'
 import { useAuth } from './AuthContext.jsx'
 import { useSettings } from './SettingsContext.jsx'
 
@@ -16,6 +17,7 @@ const exerciseFromRow = r => ({
   movementPattern: r.movement_pattern ?? null,
   exerciseType: r.exercise_type ?? null,
   tags: r.tags ?? [],
+  unilateral: !!r.unilateral, // 한쪽씩 하는 운동(횟수를 한쪽 기준으로 적음) — 볼륨·칼로리를 양쪽(×2)으로 센다
 })
 const exerciseToRow = e => ({
   id: e.id,
@@ -25,6 +27,7 @@ const exerciseToRow = e => ({
   movement_pattern: e.movementPattern ?? null,
   exercise_type: e.exerciseType ?? null,
   tags: e.tags ?? [],
+  unilateral: !!e.unilateral,
 })
 
 const routineFromRow = r => ({ id: r.id, name: r.name, isActive: r.is_active, repeatDays: r.repeat_days ?? [], exercises: r.exercises ?? [] })
@@ -179,11 +182,19 @@ export function WorkoutLogsProvider({ children }) {
     if (!kcalColumnRef.current) delete row.kcal
     return row
   }, [])
+  // exercises.unilateral 칼럼이 아직 없으면(SQL 미실행) 그 값은 저장하지 않아서 운동 저장이 실패하지 않게 한다. 이때 표시는 유지되지 않는다.
+  const [unilateralSupported, setUnilateralSupported] = useState(true)
+  const unilateralColumnRef = useRef(true)
+  const toExerciseRow = useCallback(e => {
+    const row = exerciseToRow(e)
+    if (!unilateralColumnRef.current) delete row.unilateral
+    return row
+  }, [])
   const [logs, setLogs, replaceLogs] = usePersistedState('workout_logs', toLogRow, queueRef, handleError, transformLogs)
   const [routines, setRoutines, replaceRoutines] = usePersistedState('routines', routineToRow, queueRef, handleError)
-  const [exercises, setExercises, replaceExercises] = usePersistedState('exercises', exerciseToRow, queueRef, handleError)
+  const [exercises, setExercises, replaceExercises] = usePersistedState('exercises', toExerciseRow, queueRef, handleError)
   const [bodyRecords, setBodyRecords, replaceBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleError)
-  weightSourceRef.current = { bodyRecords, profileWeightKg, calibration: settings.calorieCalibration }
+  weightSourceRef.current = { bodyRecords, profileWeightKg, calibration: settings.calorieCalibration, uni: unilateralNames(exercises) }
 
   useEffect(() => {
     let cancelled = false
@@ -205,7 +216,14 @@ export function WorkoutLogsProvider({ children }) {
       }
       const loadedRoutines = ro.data.map(routineFromRow)
       const loadedLogs = lo.data.map(logFromRow)
-      replaceExercises(ex.data.map(exerciseFromRow))
+      const loadedExercises = ex.data.map(exerciseFromRow)
+      // unilateral 칼럼 유무 확인: 행이 있는데 키가 없으면 칼럼이 아직 없는 것
+      if (ex.data.length && !('unilateral' in ex.data[0])) {
+        unilateralColumnRef.current = false
+        setUnilateralSupported(false)
+        console.warn('exercises.unilateral 칼럼이 없어 한쪽씩 표시를 저장하지 않습니다. supabase/unilateral.sql을 실행하세요.')
+      }
+      replaceExercises(loadedExercises)
       replaceRoutines(loadedRoutines)
       const loadedBodyRecords = (bo.data ?? []).map(bodyRecordFromRow)
       // kcal 칼럼 유무 확인: 행이 있는데 kcal 키가 없으면 칼럼이 아직 없는 것
@@ -217,7 +235,7 @@ export function WorkoutLogsProvider({ children }) {
       replaceBodyRecords(loadedBodyRecords)
       setLoading(false)
       // 이 시점의 렌더 전이라 ref가 아직 비어 있으므로, 칼로리 채우기에 쓸 체중 출처를 직접 넣어 둔다
-      weightSourceRef.current = { ...weightSourceRef.current, bodyRecords: loadedBodyRecords }
+      weightSourceRef.current = { ...weightSourceRef.current, bodyRecords: loadedBodyRecords, uni: unilateralNames(loadedExercises) }
       // 앞으로 2주치 "예정" 기록을 채워 넣고(이미 있으면 건너뜀), 칼로리가 비어 있는 완료 기록(이 기능 이전 기록)은 체중을 알면 채운다
       const scheduled = generateScheduledLogs(loadedRoutines, loadedLogs)
       setLogs(prev => [...scheduled, ...prev])
@@ -232,7 +250,7 @@ export function WorkoutLogsProvider({ children }) {
   }
 
   return (
-    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg }}>
+    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported }}>
       {error && (
         <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
           <span>{error}</span>

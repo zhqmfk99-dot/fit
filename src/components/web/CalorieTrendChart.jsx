@@ -1,6 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { kcalByDate } from '../../lib/calories.js'
+import { unilateralNames } from '../../lib/workoutMetrics.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 
 const pad = n => String(n).padStart(2, '0')
@@ -12,9 +13,9 @@ const daysAgoStr = n => {
 
 // 웹앱 전용 소모 칼로리 추이 — 운동한 날의 하루 합계(저장된 값의 합)를 막대로 보여준다. (PWA는 components/mobile/CalorieTrendChart.jsx)
 export default function CalorieTrendChart() {
-  const { logs, bodyRecords, profileWeightKg } = useWorkoutLogs()
+  const { logs, bodyRecords, profileWeightKg, exercises } = useWorkoutLogs()
   const { settings } = useSettings()
-  const data = kcalByDate(logs, bodyRecords, profileWeightKg, settings.calorieCalibration)
+  const data = kcalByDate(logs, bodyRecords, profileWeightKg, settings.calorieCalibration, unilateralNames(exercises))
   const hasCompleted = logs.some(l => l.isCompleted && l.performedSets?.length)
 
   // 최근 7일 합계 (오늘 포함)

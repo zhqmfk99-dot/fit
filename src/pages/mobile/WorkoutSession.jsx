@@ -344,6 +344,8 @@ export default function WorkoutSession() {
   // 바뀐 목표는 루틴과, 이미 미리 만들어진 같은 운동의 앞으로 예정된 기록(2주치)에 같이 반영한다 — 루틴만 고치면 미리 만든 기록은 옛 목표 그대로라서.
   const planOf = log => routines.find(r => r.id === log.routineId)?.exercises.find(e => e.exercise === log.exercise)
   const metaOf = log => exerciseCatalog.find(e => e.name === log.exercise)
+  // 한쪽씩 하는 운동(운동 리스트의 표시)은 횟수가 한쪽 기준이라 목표 문구에 "한쪽"을 붙인다
+  const sideOf = name => (exerciseCatalog.find(e => e.name === name)?.unilateral ? '한쪽 ' : '')
 
   // 워밍업(운동 전)·스트레칭(운동 후) 시트: 열려 있는 종류와, 그 시트에 쓸 오늘 운동의 근육
   //  - 워밍업은 아직 안 한 운동의 근육, 스트레칭은 오늘 루틴 전체의 근육
@@ -536,7 +538,7 @@ export default function WorkoutSession() {
                           <div className="min-w-0 flex-1">
                             <div className={`text-m-body font-bold truncate ${l.isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>{l.exercise}</div>
                             <div className="text-m-caption text-gray-400">
-                              {l.targetSets}세트 × {l.targetReps}회 × {l.targetWeight ? `${l.targetWeight}kg` : '맨몸'}
+                              {l.targetSets}세트 × {sideOf(l.exercise)}{l.targetReps}회 × {l.targetWeight ? `${l.targetWeight}kg` : '맨몸'}
                             </div>
                           </div>
                         </div>
@@ -564,7 +566,7 @@ export default function WorkoutSession() {
                       <div key={l.id}>
                         <div className="text-2xl font-black text-gray-800">{l.exercise}</div>
                         <div className="text-m-body font-bold text-gray-400">
-                          {l.targetSets}세트 × {l.targetReps}회 × {kgLabel(l.targetWeight)} 목표
+                          {l.targetSets}세트 × {sideOf(l.exercise)}{l.targetReps}회 × {kgLabel(l.targetWeight)} 목표
                         </div>
                         {/* 쓰는 근육(신체도) + 유튜브 자세 영상 검색 */}
                         <ExerciseGuide compact name={l.exercise} muscles={metaOf(l)?.muscles || []} />
@@ -585,7 +587,7 @@ export default function WorkoutSession() {
                               {last.result && l.routineId && !sameTarget(l, last.result.next) && (
                                 <div className="mt-1.5 flex items-center justify-between gap-2">
                                   <span className="font-bold text-gray-700">
-                                    추천 {last.result.next.sets}세트 × {last.result.next.reps}회 × {kgLabel(last.result.next.weight)}
+                                    추천 {last.result.next.sets}세트 × {sideOf(l.exercise)}{last.result.next.reps}회 × {kgLabel(last.result.next.weight)}
                                   </span>
                                   <button
                                     type="button"
@@ -641,6 +643,11 @@ export default function WorkoutSession() {
             </div>
           )}
           <div className="text-2xl font-black text-gray-800 text-center mt-1">{currentLog.exercise}</div>
+          {sideOf(currentLog.exercise) && (
+            <div className="mt-1.5 text-center">
+              <span className="inline-block px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 text-m-caption font-bold">한쪽씩 · 왼쪽·오른쪽을 모두 하면 1세트</span>
+            </div>
+          )}
           <SetDots total={currentLog.targetSets || 1} done={doneSets.length} viewing={reviewIdx} locked={editing} onSelect={openFinishedSet} />
           {/* 끝낸 세트를 보고 있을 때만 안내가 나온다. 화면이 출렁이지 않게 자리는 항상 잡아 둔다 */}
           <div className={`h-5 mt-3 mb-4 text-center text-m-caption font-bold ${editing ? 'text-letusBlue' : 'text-gray-400'}`}>
@@ -654,7 +661,7 @@ export default function WorkoutSession() {
             const change = field => v => (reviewing ? setEditForm(f => ({ ...f, [field]: v })) : setSetForm(f => ({ ...f, [field]: v })))
             return (
               <div className="space-y-4">
-                <StepperCard label="반복" value={shown.reps} step={1} onChange={change('reps')} disabled={reviewing && !editing} />
+                <StepperCard label={sideOf(currentLog.exercise) ? '반복 (한쪽)' : '반복'} value={shown.reps} step={1} onChange={change('reps')} disabled={reviewing && !editing} />
                 <StepperCard label="무게" value={shown.weight} step={2.5} unit="kg" onChange={change('weight')} disabled={reviewing && !editing} />
               </div>
             )
@@ -752,7 +759,7 @@ export default function WorkoutSession() {
                   </div>
                   <div className="mt-0.5 font-normal text-gray-400">{n.reason}</div>
                   <div className="mt-0.5 text-gray-700">
-                    다음 목표 {n.next.sets}세트 × {n.next.reps}회 × {kgLabel(n.next.weight)}
+                    다음 목표 {n.next.sets}세트 × {sideOf(n.exercise)}{n.next.reps}회 × {kgLabel(n.next.weight)}
                   </div>
                 </div>
               ))}

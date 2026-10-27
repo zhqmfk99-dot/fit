@@ -12,7 +12,7 @@
 //   그래서 화면에는 "약 N kcal"로 표시하고, 시계·운동 앱 값과 비교해 CALORIE_CALIBRATION 하나로 맞출 수 있게 했다.
 // ※ 아래 상수 중 MET 범위(3.5~6.0)만 공개 자료에 근거가 있고, 나머지(0.6/0.4 비율, 밀도 기준, 시간 추정값)는 합리적으로 정한 가정이다.
 
-import { getRecentMaxWeight } from './workoutMetrics.js'
+import { getRecentMaxWeight, sideFactor } from './workoutMetrics.js'
 
 // ── 조정 가능한 값 ─────────────────────────────────────────────
 export const CALORIE_CALIBRATION = 1.0 // 기본 보정 계수. 사용자는 설정에서 직접 바꾼다(settings.calorieCalibration) — 아래 함수들의 calibration 인자로 들어온다. 실측과 비교해 맞춘다 (예: 늘 15% 낮게 나오면 1.15)
@@ -52,19 +52,20 @@ function leadInSeconds(log, allLogs) {
 }
 
 // allLogs를 주면 시작 전 준비 시간을 실측으로 계산한다(없으면 가정값)
-export function logSeconds(log, allLogs) {
+export function logSeconds(log, allLogs, uni) {
   const sets = log.performedSets ?? []
   if (!sets.length) return 0
   let sec = leadInSeconds(log, allLogs)
+  const side = sideFactor(log, uni) // 시간을 재지 않은 세트는 횟수로 추정하는데, 한쪽씩 하는 운동은 양쪽을 모두 한 시간으로 본다
   sets.forEach((s, i) => {
-    sec += Math.min(s.durationSeconds ?? (s.reps || 0) * SECONDS_PER_REP, MAX_SET_SECONDS)
+    sec += Math.min(s.durationSeconds ?? (s.reps || 0) * SECONDS_PER_REP * side, MAX_SET_SECONDS)
     if (i > 0) sec += Math.min(s.restBeforeSeconds ?? DEFAULT_REST_SECONDS, MAX_REST_SECONDS)
   })
   return sec
 }
 
 // 운동 기록 하나의 강도 점수(0~1)
-function intensityScore(log, allLogs, bodyWeightKg, seconds) {
+function intensityScore(log, allLogs, bodyWeightKg, seconds, uni) {
   const sets = log.performedSets
   const avgWeight = sets.reduce((a, s) => a + (s.weight || 0), 0) / sets.length
   if (avgWeight <= 0) return BODYWEIGHT_SCORE
@@ -75,7 +76,7 @@ function intensityScore(log, allLogs, bodyWeightKg, seconds) {
   const relative = recentMax ? clamp(avgWeight / recentMax, 0, 1) : NEUTRAL_RELATIVE
 
   // 밀도: 체중 대비 분당 볼륨
-  const volume = sets.reduce((a, s) => a + (s.reps || 0) * (s.weight || 0), 0)
+  const volume = sets.reduce((a, s) => a + (s.reps || 0) * (s.weight || 0), 0) * sideFactor(log, uni) // 한쪽씩 하는 운동은 양쪽 볼륨
   const density = volume / (bodyWeightKg * (seconds / 60))
   const densityScore = clamp((density - DENSITY_LOW) / (DENSITY_HIGH - DENSITY_LOW), 0, 1)
 
@@ -83,31 +84,31 @@ function intensityScore(log, allLogs, bodyWeightKg, seconds) {
 }
 
 // 운동 기록 하나의 MET
-export function logMet(log, allLogs, bodyWeightKg) {
-  const seconds = logSeconds(log, allLogs)
+export function logMet(log, allLogs, bodyWeightKg, uni) {
+  const seconds = logSeconds(log, allLogs, uni)
   if (!seconds) return 0
-  return MET_MIN + (MET_MAX - MET_MIN) * intensityScore(log, allLogs, bodyWeightKg, seconds)
+  return MET_MIN + (MET_MAX - MET_MIN) * intensityScore(log, allLogs, bodyWeightKg, seconds, uni)
 }
 
 const isDone = l => l.isCompleted && l.performedSets?.length > 0
 
 // 운동 기록 하나의 소모 칼로리. 완료하지 않았거나 세트 기록이 없거나 체중을 모르면 null. 소수 첫째 자리까지.
 // 이 값을 운동 기록(workout_logs.kcal)에 저장한다 — 저장하면 나중에 최고 무게·체중·보정 계수가 바뀌어도 그날 값은 변하지 않는다.
-export function estimateLogKcal(log, allLogs, bodyWeightKg, calibration = CALORIE_CALIBRATION) {
+export function estimateLogKcal(log, allLogs, bodyWeightKg, calibration = CALORIE_CALIBRATION, uni) {
   if (!isDone(log) || !bodyWeightKg) return null
-  const kcal = logMet(log, allLogs, bodyWeightKg) * bodyWeightKg * (logSeconds(log, allLogs) / 3600) * calibration
+  const kcal = logMet(log, allLogs, bodyWeightKg, uni) * bodyWeightKg * (logSeconds(log, allLogs, uni) / 3600) * calibration
   return Math.round(kcal * 10) / 10
 }
 
 // 하루(날짜) 소모 칼로리 = 그날 완료한 운동들의 저장된 칼로리 합. 저장값이 없는 기록(이 기능 이전 기록)은 체중으로 즉석 계산한다.
 // 하나라도 값을 구할 수 없으면(저장값 없고 체중도 모름) 부분 합계로 오해하지 않게 null. 그날 완료한 운동이 없어도 null.
 // 5kcal 단위로 반올림해서 실제 정밀도보다 정확해 보이지 않게 한다.
-export function estimateDayKcal(date, allLogs, bodyWeightKg, calibration = CALORIE_CALIBRATION) {
+export function estimateDayKcal(date, allLogs, bodyWeightKg, calibration = CALORIE_CALIBRATION, uni) {
   const dayLogs = allLogs.filter(l => l.date === date && isDone(l))
   if (!dayLogs.length) return null
   let sum = 0
   for (const l of dayLogs) {
-    const kcal = l.kcal ?? estimateLogKcal(l, allLogs, bodyWeightKg, calibration)
+    const kcal = l.kcal ?? estimateLogKcal(l, allLogs, bodyWeightKg, calibration, uni)
     if (kcal == null) return null
     sum += kcal
   }
@@ -119,23 +120,23 @@ export function estimateDayKcal(date, allLogs, bodyWeightKg, calibration = CALOR
 //  - 이미 값이 있고 날짜·세트 기록이 안 바뀌었으면 그대로 둔다 (과거 값이 흔들리지 않게)
 //  - 새로 완료했거나 수정했거나 값이 비어 있으면 그 시점의 체중으로 계산
 // 체중을 모르면 null로 두고, 체중이 생긴 뒤 다음 저장 때 채워진다.
-export function applyKcal(next, prev, { bodyRecords, profileWeightKg, calibration = CALORIE_CALIBRATION }) {
+export function applyKcal(next, prev, { bodyRecords, profileWeightKg, calibration = CALORIE_CALIBRATION, uni }) {
   const prevById = new Map(prev.map(l => [l.id, l]))
   return next.map(l => {
     if (!isDone(l)) return l.kcal == null ? l : { ...l, kcal: null }
     const before = prevById.get(l.id)
     const unchanged = before && isDone(before) && before.date === l.date && JSON.stringify(before.performedSets) === JSON.stringify(l.performedSets)
     if (unchanged && l.kcal != null) return l
-    const kcal = estimateLogKcal(l, next, bodyWeightOn(l.date, bodyRecords, profileWeightKg), calibration)
+    const kcal = estimateLogKcal(l, next, bodyWeightOn(l.date, bodyRecords, profileWeightKg), calibration, uni)
     return kcal === (l.kcal ?? null) ? l : { ...l, kcal }
   })
 }
 
 // 날짜별 소모 칼로리 목록(오래된 순) — 추이 그래프용
-export function kcalByDate(allLogs, bodyRecords, profileWeightKg, calibration = CALORIE_CALIBRATION) {
+export function kcalByDate(allLogs, bodyRecords, profileWeightKg, calibration = CALORIE_CALIBRATION, uni) {
   const dates = [...new Set(allLogs.filter(isDone).map(l => l.date))].sort()
   return dates
-    .map(date => ({ date, kcal: estimateDayKcal(date, allLogs, bodyWeightOn(date, bodyRecords, profileWeightKg), calibration) }))
+    .map(date => ({ date, kcal: estimateDayKcal(date, allLogs, bodyWeightOn(date, bodyRecords, profileWeightKg), calibration, uni) }))
     .filter(d => d.kcal != null)
 }
 

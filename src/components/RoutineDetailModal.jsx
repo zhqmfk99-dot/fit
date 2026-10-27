@@ -3,11 +3,15 @@ import CalendarAddModal from './CalendarAddModal.jsx'
 import { CalendarPlus } from 'lucide-react'
 import { useState } from 'react'
 import { repsText } from '../lib/progression.js'
+import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
+import { unilateralNames } from '../lib/workoutMetrics.js'
 
 const ALL_DAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 export default function RoutineDetailModal({ row, onClose, onEdit, onDelete }) {
   const [showCalendar, setShowCalendar] = useState(false)
+  const { exercises } = useWorkoutLogs()
+  const uni = unilateralNames(exercises) // 한쪽씩 하는 운동은 횟수 앞에 "한쪽"을 붙인다
   useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   if (!row) return null
 
@@ -70,7 +74,7 @@ export default function RoutineDetailModal({ row, onClose, onEdit, onDelete }) {
                 <div key={i} className="flex items-center justify-between text-m-body">
                   <span className="text-gray-700">{ex.exercise}</span>
                   <span className="text-gray-400">
-                    {ex.sets}세트 x {repsText(ex)}회 x {ex.weight}kg
+                    {ex.sets}세트 x {uni.has(ex.exercise) ? '한쪽 ' : ''}{repsText(ex)}회 x {ex.weight}kg
                   </span>
                 </div>
               ))

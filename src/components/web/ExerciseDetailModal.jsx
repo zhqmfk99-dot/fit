@@ -1,4 +1,4 @@
-﻿import { MUSCLE_LABELS } from '../../lib/muscleMap.js'
+import { MUSCLE_LABELS } from '../../lib/muscleMap.js'
 import { equipmentBadgeClass } from '../../lib/equipmentStyle.js'
 import ExerciseGuide from './ExerciseGuide.jsx'
 
@@ -57,6 +57,14 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
               <span className="px-3 py-1.5 rounded-full text-ui-body font-bold bg-gray-100 text-gray-600">{row.exerciseType || '-'}</span>
             </div>
           </div>
+
+          {row.unilateral && (
+            <div>
+              <label className="block text-ui-body font-bold text-gray-600 mb-1.5">기록 방식</label>
+              <span className="px-3 py-1.5 rounded-full text-ui-body font-bold bg-orange-50 text-orange-700">한쪽씩 · 횟수는 한쪽 기준</span>
+              <p className="mt-1.5 text-ui-caption text-gray-400 leading-relaxed">볼륨·칼로리는 양쪽(×2)으로 계산해요.</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-ui-body font-bold text-gray-600 mb-1.5">태그</label>

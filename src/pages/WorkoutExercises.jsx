@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import PageHeader from '../components/PageHeader.jsx'
 import ExerciseFormModal from '../components/web/ExerciseFormModal.jsx'
 import ExerciseDetailModal from '../components/web/ExerciseDetailModal.jsx'
@@ -286,6 +286,7 @@ export default function WorkoutExercises() {
         return (
           <td key={origIdx} className="px-4 py-3 text-left truncate font-bold text-gray-800" title={row.name}>
             {row.name}
+            {row.unilateral && <span className="ml-1.5 text-ui-caption font-bold px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700">한쪽씩</span>}
           </td>
         )
       case 1:

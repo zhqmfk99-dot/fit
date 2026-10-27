@@ -59,6 +59,7 @@ export function buildCatalogPayload(exercises, equipment, avoidIds = [], include
       equipment: e.equipment || '',
       pattern: e.movementPattern || '',
       type: e.exerciseType || '',
+      unilateral: !!e.unilateral, // 한쪽씩 하는 운동 — 횟수가 한쪽 기준이라는 것을 AI가 알도록 함께 보낸다
     }))
 }
 

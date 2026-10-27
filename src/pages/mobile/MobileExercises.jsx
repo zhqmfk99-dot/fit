@@ -141,6 +141,7 @@ export default function MobileExercises() {
                   <div className="flex flex-wrap gap-1.5">
                     {ex.equipment && <span className={`text-m-caption font-bold px-2 py-0.5 rounded-full ${equipmentBadgeClass(ex.equipment)}`}>{ex.equipment}</span>}
                     {ex.movementPattern && <span className="text-m-caption font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">{ex.movementPattern}</span>}
+                    {ex.unilateral && <span className="text-m-caption font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700">한쪽씩</span>}
                     {ex.exerciseType && (
                       <span className={`text-m-caption font-bold px-2 py-0.5 rounded-full ${ex.exerciseType === '복합관절' ? 'bg-sky-50 text-sky-700' : 'bg-gray-100 text-gray-500'}`}>
                         {ex.exerciseType}

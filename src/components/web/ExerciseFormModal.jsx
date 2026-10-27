@@ -1,9 +1,11 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
+import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { TRAINABLE_MUSCLES, MUSCLE_LABELS, EQUIPMENT_OPTIONS, MOVEMENT_PATTERNS, EXERCISE_TYPES } from '../../lib/muscleMap.js'
 
 const ACCENT = 'bg-letusOrange'
 
 export default function ExerciseFormModal({ row, existingNames = [], onClose, onSave }) {
+  const { unilateralSupported } = useWorkoutLogs()
   const isEdit = !!row
 
   const [name, setName] = useState(row?.name || '')
@@ -11,6 +13,7 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
   const [equipment, setEquipment] = useState(row?.equipment || '')
   const [movementPattern, setMovementPattern] = useState(row?.movementPattern || '')
   const [exerciseType, setExerciseType] = useState(row?.exerciseType || '')
+  const [unilateral, setUnilateral] = useState(!!row?.unilateral) // 한쪽씩 하는 운동: 횟수를 한쪽 기준으로 적고, 볼륨·칼로리는 양쪽으로 센다
   const [tags, setTags] = useState(row?.tags || [])
   const [tagInput, setTagInput] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
@@ -52,6 +55,7 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
       equipment,
       movementPattern: movementPattern || null,
       exerciseType: exerciseType || null,
+      unilateral,
       tags: finalTags,
     })
     onClose()
@@ -187,6 +191,15 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
               })}
             </div>
           </div>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input type="checkbox" checked={unilateral} onChange={e => setUnilateral(e.target.checked)} className="mt-0.5 w-4 h-4 accent-letusBlue shrink-0" />
+            <span className="flex flex-col">
+              <span className="text-ui-body font-bold text-gray-700">한쪽씩 하는 운동</span>
+              <span className="text-ui-caption text-gray-400 leading-relaxed">횟수를 한쪽 기준으로 적어요(예: 한쪽 10회). 볼륨·칼로리는 양쪽으로 계산해요.</span>
+              {!unilateralSupported && <span className="text-ui-caption font-bold text-red-500 leading-relaxed">이 표시를 저장하려면 supabase/unilateral.sql을 먼저 실행해 주세요.</span>}
+            </span>
+          </label>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-ui-body font-bold text-gray-700">

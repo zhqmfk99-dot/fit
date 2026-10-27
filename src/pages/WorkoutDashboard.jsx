@@ -9,13 +9,13 @@ import CalorieTrendChart from '../components/web/CalorieTrendChart.jsx'
 import WeeklyReportCard from '../components/web/WeeklyReportCard.jsx'
 import GoalProgressCard from '../components/web/GoalProgressCard.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
-import { totalVolume } from '../lib/workoutMetrics.js'
+import { totalVolume, unilateralNames } from '../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../lib/muscleMap.js'
 
-function buildVolumeTrend(logs) {
+function buildVolumeTrend(logs, uni) {
   const byDate = {}
   logs.forEach(l => {
-    byDate[l.date] = (byDate[l.date] || 0) + totalVolume(l)
+    byDate[l.date] = (byDate[l.date] || 0) + totalVolume(l, uni)
   })
   return Object.entries(byDate)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -27,15 +27,16 @@ export default function WorkoutDashboard() {
   const [selectedMuscle, setSelectedMuscle] = useState(null)
 
   // 아직 완료 전인 "예정" 기록은 실제로 한 게 아니라서 통계에서 제외한다
+  const uni = unilateralNames(exercises) // 한쪽씩 하는 운동은 볼륨을 양쪽(×2)으로 센다
   const completedLogs = logs.filter(l => l.isCompleted)
   const sessionCount = new Set(completedLogs.map(l => l.date)).size
   const avgFatigue = completedLogs.length ? (completedLogs.reduce((sum, l) => sum + l.fatigue, 0) / completedLogs.length).toFixed(1) : '0.0'
-  const totalVolumeSum = completedLogs.reduce((sum, l) => sum + totalVolume(l), 0)
+  const totalVolumeSum = completedLogs.reduce((sum, l) => sum + totalVolume(l, uni), 0)
 
   // 인체도에서 부위를 선택하면, 그 부위를 쓰는 운동만 걸러서 볼륨 추이를 다시 그린다
   const targetExercises = selectedMuscle ? exercisesForMuscle(selectedMuscle, exercises) : null
   const trendLogs = targetExercises ? completedLogs.filter(l => targetExercises.includes(l.exercise)) : completedLogs
-  const trend = buildVolumeTrend(trendLogs)
+  const trend = buildVolumeTrend(trendLogs, uni)
 
   return (
     <div>
