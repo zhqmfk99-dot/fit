@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, LogOut, Smartphone } from 'lucide-react'
+import { ChevronRight, LogOut, Smartphone, Bell, Download } from 'lucide-react'
 import PageHeader from '../../components/PageHeader.jsx'
 import ProfileModal from '../../components/ProfileModal.jsx'
 import { useAuth, MIN_PASSWORD_LENGTH } from '../../context/AuthContext.jsx'
 import { useSettings, SETTING_LIMITS } from '../../context/SettingsContext.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { EQUIPMENT_OPTIONS } from '../../lib/muscleMap.js'
+import { notifyRestEnd, unlockAudio, vibrationSupported } from '../../lib/restAlert.js'
+import { useCalorieSettings } from '../../hooks/useCalorieSettings.js'
+import { useDataExport } from '../../hooks/useDataExport.js'
 
 const THEME_OPTIONS = [
   { value: 'system', label: '시스템' },
@@ -69,6 +72,10 @@ export default function MobileSettings() {
   const [pwMessage, setPwMessage] = useState({ text: '', ok: false })
   const [busy, setBusy] = useState(false)
   const [aiUsed, setAiUsed] = useState(null)
+  const [alertTest, setAlertTest] = useState('')
+  const cal = useCalorieSettings()
+  const exp = useDataExport()
+  const [cmp, setCmp] = useState({ app: '', watch: '' })
 
   // 최근 24시간 AI 루틴 만들기 사용 횟수 (ai_usage 테이블이 없으면 표시하지 않는다)
   useEffect(() => {
@@ -84,6 +91,16 @@ export default function MobileSettings() {
   }, [])
 
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true
+
+  // 휴식 종료 알림 시험: 눌렀을 때 실제로 진동·소리를 내 보고, 이 기기에서 되는지 알려 준다(소리는 화면을 누른 뒤에만 낼 수 있어서 여기서 열어 둔다)
+  const testAlert = () => {
+    unlockAudio()
+    const r = notifyRestEnd({ vibrate: settings.restAlertVibrate, sound: settings.restAlertSound })
+    const parts = []
+    if (settings.restAlertVibrate) parts.push(vibrationSupported() ? '진동을 보냈어요' : '이 기기·브라우저는 진동을 지원하지 않아요')
+    if (settings.restAlertSound) parts.push(r.sounded ? '소리를 냈어요(안 들리면 무음 모드를 확인하세요)' : '이 기기에서는 소리를 낼 수 없어요')
+    setAlertTest(parts.length ? parts.join(' · ') : '진동·소리가 모두 꺼져 있어요')
+  }
 
   const changeRest = delta => update({ defaultRestSeconds: settings.defaultRestSeconds + delta })
 
@@ -193,6 +210,9 @@ export default function MobileSettings() {
               </div>
             }
           />
+          <Row title="휴식 종료 진동" desc="휴식 시간이 끝나면 진동으로 알려요. 아이폰은 진동을 지원하지 않아요." right={<Switch checked={settings.restAlertVibrate} onChange={v => update({ restAlertVibrate: v })} label="휴식 종료 진동" />} />
+          <Row title="휴식 종료 소리" desc="휴식 시간이 끝나면 짧은 비프음을 내요. 무음 모드에서는 들리지 않을 수 있어요." right={<Switch checked={settings.restAlertSound} onChange={v => update({ restAlertSound: v })} label="휴식 종료 소리" />} />
+          <Row title="알림 시험해 보기" desc={alertTest || '지금 설정으로 진동·소리를 한 번 내 봐요.'} onClick={testAlert} right={<Bell className="w-4 h-4 text-gray-400 shrink-0" />} />
           <Row title="운동 중 화면 꺼짐 방지" desc="운동 진행 화면이 켜져 있는 동안 화면이 자동으로 꺼지지 않게 해요. 배터리를 더 써요." right={<Switch checked={settings.keepAwake} onChange={v => update({ keepAwake: v })} label="운동 중 화면 꺼짐 방지" />} />
           <Row
             title="점진 과부하 자동 적용"
@@ -233,10 +253,47 @@ export default function MobileSettings() {
           </div>
         </Section>
 
+        <Section title="소모 칼로리 보정">
+          <Row
+            title="보정 계수"
+            desc="앱이 보여주는 소모 칼로리가 시계·운동 앱보다 늘 낮으면 올리고, 높으면 내려요. 새로 저장되는 기록부터 적용돼요."
+            right={
+              <div className="flex items-center gap-1 shrink-0">
+                <button type="button" aria-label="보정 계수 줄이기" disabled={cal.value <= cal.limits.calMin} onClick={() => cal.step(-cal.limits.calStep)} className="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 text-m-title font-bold active:bg-gray-200 disabled:opacity-40">
+                  −
+                </button>
+                <span className="w-14 text-center text-m-body font-bold text-gray-800">×{cal.value.toFixed(2)}</span>
+                <button type="button" aria-label="보정 계수 늘리기" disabled={cal.value >= cal.limits.calMax} onClick={() => cal.step(cal.limits.calStep)} className="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 text-m-title font-bold active:bg-gray-200 disabled:opacity-40">
+                  +
+                </button>
+              </div>
+            }
+          />
+          <div className="px-4 py-3 space-y-2">
+            <div className="text-m-body font-bold text-gray-800">시계 값과 비교해서 맞추기</div>
+            <div className="text-m-caption text-gray-400 leading-relaxed">같은 운동에 대해 앱이 보여준 값과 시계(또는 다른 운동 앱)가 보여준 값을 넣으면 계수를 계산해 줘요.</div>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="number" inputMode="numeric" value={cmp.app} onChange={e => setCmp({ ...cmp, app: e.target.value })} placeholder="앱 값 (kcal)" aria-label="앱이 보여준 칼로리" className="min-w-0 border border-gray-300 rounded-[4px] px-3 py-2 text-m-body bg-white focus:outline-none focus:border-letusBlue" />
+              <input type="number" inputMode="numeric" value={cmp.watch} onChange={e => setCmp({ ...cmp, watch: e.target.value })} placeholder="시계 값 (kcal)" aria-label="시계가 보여준 칼로리" className="min-w-0 border border-gray-300 rounded-[4px] px-3 py-2 text-m-body bg-white focus:outline-none focus:border-letusBlue" />
+            </div>
+            <button type="button" onClick={() => cal.fitFromWatch(cmp.app, cmp.watch) && setCmp({ app: '', watch: '' })} className="w-full min-h-[40px] bg-letusBlue text-white text-m-body font-bold rounded-lg">
+              계수 계산해서 적용
+            </button>
+          </div>
+          <Row title="과거 기록 다시 계산" desc={`완료한 기록 ${cal.doneCount}건의 저장된 칼로리를 지금 계수로 다시 계산해 덮어써요.`} onClick={cal.recompute} right={<ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />} />
+          {cal.message && <div className="px-4 py-3 text-m-caption font-bold text-letusBlue bg-blue-50">{cal.message}</div>}
+        </Section>
+
         <Section title="AI 루틴 만들기">
           <Row title="내 운동 기록 참고" desc="자주 한 운동과 최근 안 쓴 부위를 참고해요. 운동 이름·부위만 보내요." right={<Switch checked={settings.aiUseHistory} onChange={v => update({ aiUseHistory: v })} label="내 운동 기록 참고" />} />
           <Row title="체형 정보 함께 보내기" desc="키·몸무게·성별·나이를 참고해요. 건강 정보라 켠 때만 보내요." right={<Switch checked={settings.aiUseBody} onChange={v => update({ aiUseBody: v })} label="체형 정보 함께 보내기" />} />
           {aiUsed != null && <Row title="최근 24시간 사용" right={<span className="text-m-body font-bold text-gray-500">{aiUsed}회</span>} />}
+        </Section>
+
+        <Section title="데이터">
+          <Row title="운동 기록 내려받기" desc={`완료한 운동 ${exp.logCount}세트를 CSV 파일로 저장해요.`} onClick={exp.exportLogs} right={<Download className="w-4 h-4 text-gray-400 shrink-0" />} />
+          <Row title="신체 기록 내려받기" desc={`신체 기록 ${exp.bodyCount}건을 CSV 파일로 저장해요.`} onClick={exp.exportBody} right={<Download className="w-4 h-4 text-gray-400 shrink-0" />} />
+          {exp.message && <div className="px-4 py-3 text-m-caption font-bold text-letusBlue bg-blue-50">{exp.message}</div>}
         </Section>
 
         <Section title="앱 정보">

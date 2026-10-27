@@ -1,6 +1,8 @@
 ﻿import { useState, useMemo } from 'react'
 import { GripVertical } from 'lucide-react'
+import AiRefineBox from './AiRefineBox.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
+import { useSettings } from '../../context/SettingsContext.jsx'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
 import { buildTagIndex, matchesQuery, aliasMatch } from '../../lib/exerciseSearch.js'
 
@@ -26,6 +28,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
   const isEdit = !!row
   const init = row ?? draft
   const { routines, exercises: exerciseCatalog } = useWorkoutLogs()
+  const { settings } = useSettings()
   const knownExercises = useMemo(() => getKnownExerciseNames(routines, exerciseCatalog), [routines, exerciseCatalog])
 
   const [name, setName] = useState(init?.name || '')
@@ -33,6 +36,9 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
   const [repeatDays, setRepeatDays] = useState(init?.repeatDays || [])
   const [exercises, setExercises] = useState(init?.exercises?.map(e => ({ ...e })) || [emptyExercise()])
   const [errorMsg, setErrorMsg] = useState('')
+  // AI 초안 설명(수정 요청을 하면 새 설명으로 바뀐다)과, 방금 수정 되돌리기용 이전 운동 행
+  const [aiNote, setAiNote] = useState(draftNote)
+  const [undoRows, setUndoRows] = useState(null)
   const [dragIndex, setDragIndex] = useState(null)
   const [dropdownIdx, setDropdownIdx] = useState(null)
 
@@ -96,7 +102,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
         sets: Number(e.sets) || 0,
         reps: Number(e.reps) || 0,
         weight: Number(e.weight) || 0,
-        restSeconds: Number(e.restSeconds) || 90,
+        restSeconds: Number(e.restSeconds) || settings.defaultRestSeconds,
         ...(Number(e.progressReps) > 0 ? { progressReps: Number(e.progressReps) } : {}),
         linkedToNext: !!e.linkedToNext,
       }))
@@ -138,9 +144,25 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
           {draft && (
             <div className="bg-blue-50 text-letusBlue text-ui-caption font-bold p-3 rounded border border-blue-100 leading-relaxed">
               ✨ AI가 만든 초안이에요. 운동·무게를 확인하고 고친 뒤 저장해 주세요.
-              {draftNote && <div className="mt-1 font-normal text-gray-600">{draftNote}</div>}
+              {aiNote && <div className="mt-1 font-normal text-gray-600">{aiNote}</div>}
               <div className="mt-1 font-normal text-gray-600">무게는 AI가 정하지 않아요. 비어 있는 운동은 직접 입력해 주세요. 처음 하는 운동은 10회를 2~3회 남기고 할 수 있는 가벼운 무게에서 시작하세요.</div>
             </div>
+          )}
+          {draft?.request && (
+            <AiRefineBox
+              request={draft.request}
+              rows={exercises}
+              canUndo={!!undoRows}
+              onUndo={() => {
+                setExercises(undoRows)
+                setUndoRows(null)
+              }}
+              onApply={(rows, summary) => {
+                setUndoRows(exercises)
+                setExercises(rows)
+                if (summary) setAiNote(summary)
+              }}
+            />
           )}
           {errorMsg && (
             <div className="bg-red-50 text-red-600 text-ui-body font-bold p-3 rounded border border-red-100 flex items-center gap-1.5">
@@ -291,7 +313,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
                         value={ex.restSeconds}
                         onChange={e => updateExercise(idx, 'restSeconds', e.target.value)}
                         placeholder="휴식(초)"
-                        title="세트간 휴식시간(초), 기본 90초"
+                        title={`세트간 휴식시간(초), 비우면 기본 ${settings.defaultRestSeconds}초 (설정에서 바꿀 수 있어요)`}
                         className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-ui-body focus:outline-none focus:border-letusOrange"
                       />
                     </div>

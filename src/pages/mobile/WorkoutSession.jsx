@@ -4,6 +4,7 @@ import { X, Check, Link2 } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useBackHandler } from '../../context/BackNavigationContext.jsx'
+import { notifyRestEnd, unlockAudio } from '../../lib/restAlert.js'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
 import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
@@ -223,7 +224,11 @@ export default function WorkoutSession() {
   }, [subPhase, restEndAt])
 
   useEffect(() => {
-    if (subPhase === 'rest' && restRemaining <= 0) finishRest()
+    if (subPhase === 'rest' && restRemaining <= 0) {
+      // 시간이 다 돼서 끝난 경우에만 알린다("건너뛰기"는 사용자가 직접 누른 것이라 알리지 않음)
+      notifyRestEnd({ vibrate: settings.restAlertVibrate, sound: settings.restAlertSound })
+      finishRest()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subPhase, restRemaining])
 
@@ -378,6 +383,7 @@ export default function WorkoutSession() {
 
   const completeSet = () => {
     if (!setForm || !currentLog || !currentStep) return
+    unlockAudio() // 휴식 종료 소리를 낼 수 있게, 화면을 누른 이 시점에 오디오를 열어 둔다
     const endedAt = Date.now()
     const durationSeconds = Math.max(1, Math.round((endedAt - setStartAt) / 1000))
     const newSet = { reps: setForm.reps, weight: setForm.weight, durationSeconds, restBeforeSeconds: pendingRestBefore, startedAt: setStartAt, endedAt }

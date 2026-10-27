@@ -1,7 +1,9 @@
+import { useBackHandler } from '../../context/BackNavigationContext.jsx'
 import { useState, useMemo } from 'react'
 import { Sparkles, X } from 'lucide-react'
 import { useAiRoutine } from '../../hooks/useAiRoutine.js'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
+import { useSettings } from '../../context/SettingsContext.jsx'
 import { EQUIPMENT_OPTIONS } from '../../lib/muscleMap.js'
 import { buildTagIndex, matchesQuery } from '../../lib/exerciseSearch.js'
 import {
@@ -10,25 +12,6 @@ import {
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
 const MAX_AVOID = 20
-const PREFS_KEY = 'fit-ai-routine-prefs'
-
-// 개인화 체크박스(내 운동 기록 참고·체형 정보 전송)는 이 기기에서 마지막 선택을 기억한다. 저장소를 못 쓰면 기본값.
-// 기본값: 운동 기록 참고 = 켬(운동 이름·부위 빈도만 보냄), 체형 정보 = 끔(건강 정보라서 직접 켜야 함)
-const loadPrefs = () => {
-  try {
-    const p = JSON.parse(localStorage.getItem(PREFS_KEY))
-    return { useHistory: p?.useHistory !== false, useBody: p?.useBody === true }
-  } catch {
-    return { useHistory: true, useBody: false }
-  }
-}
-const savePrefs = prefs => {
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
-  } catch {
-    /* 저장소를 못 쓰는 환경이면 기억하지 않는다 */
-  }
-}
 
 function Pills({ options, value, onChange, multi = false, format = v => v }) {
   const isOn = o => (multi ? value.includes(o) : value === o)
@@ -138,6 +121,7 @@ const Toggle = ({ checked, onChange, title, desc }) => (
 
 // AI 루틴 만들어주기 — 조건을 고르면 루틴 등록 화면에 채울 초안을 만들어 onDraft로 넘긴다 (웹앱용 화면)
 export default function AiRoutineModal({ onClose, onDraft }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const { loading, error, generate } = useAiRoutine()
   const { exercises: catalog } = useWorkoutLogs()
   const tagsByName = useMemo(() => buildTagIndex(catalog), [catalog])
@@ -147,18 +131,17 @@ export default function AiRoutineModal({ onClose, onDraft }) {
   const [focus, setFocus] = useState(['전신'])
   const [muscles, setMuscles] = useState([]) // 세부 부위(선택) — 고르면 그 부위를 쓰는 운동만 후보가 된다
   const [showMuscles, setShowMuscles] = useState(false)
-  const [equipment, setEquipment] = useState([])
+  const { settings, update } = useSettings()
+  // 설정의 "내 운동기구"가 있으면 자동 선택한다(맨몸은 기구가 필요 없어 함께). 이 모달에서 바꾸는 건 이번 생성에만 적용된다.
+  const [equipment, setEquipment] = useState(() => (settings.myEquipment.length ? [...new Set([...settings.myEquipment, '맨몸'])] : []))
   const [include, setInclude] = useState([])
   const [avoid, setAvoid] = useState([])
   const [repeatDays, setRepeatDays] = useState([])
   const [notes, setNotes] = useState('')
-  const [prefs, setPrefs] = useState(loadPrefs)
-
-  const setPref = (key, value) => {
-    const next = { ...prefs, [key]: value }
-    setPrefs(next)
-    savePrefs(next)
-  }
+  // 개인화 체크박스(내 운동 기록 참고·체형 정보 전송)는 "설정"의 기본값을 쓰고, 여기서 바꾸면 설정에도 저장된다(계정에 저장).
+  // 기본값: 운동 기록 참고 = 켬(운동 이름·부위 빈도만 보냄), 체형 정보 = 끔(건강 정보라서 직접 켜야 함)
+  const prefs = { useHistory: settings.aiUseHistory, useBody: settings.aiUseBody }
+  const setPref = (key, value) => update(key === 'useHistory' ? { aiUseHistory: value } : { aiUseBody: value })
 
   // 집중 부위: 여러 개 고를 수 있다. "전신"은 다른 부위와 같이 고르지 않고(고르면 나머지 해제), 전부 해제하면 전신으로 돌아간다.
   const handleFocus = next => {
@@ -250,7 +233,7 @@ export default function AiRoutineModal({ onClose, onDraft }) {
               </div>
             )}
           </div>
-          <Field label="사용할 장비" hint="아무것도 안 고르면 전체">
+          <Field label="사용할 장비" hint={settings.myEquipment.length ? "내 운동기구가 자동 선택됐어요 (설정에서 바꿔요)" : "아무것도 안 고르면 전체"}>
             <Pills options={EQUIPMENT_OPTIONS} value={equipment} onChange={setEquipment} multi />
           </Field>
           <Field label="꼭 넣고 싶은 운동" hint={`선택 · 최대 ${AI_MAX_INCLUDE}개`}>

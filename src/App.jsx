@@ -11,6 +11,7 @@ import WorkoutDashboard from './pages/WorkoutDashboard.jsx'
 import WorkoutLog from './pages/WorkoutLog.jsx'
 import WorkoutRoutine from './pages/WorkoutRoutine.jsx'
 import WorkoutExercises from './pages/WorkoutExercises.jsx'
+import WorkoutSettings from './pages/WorkoutSettings.jsx'
 import MobileDashboard from './pages/mobile/MobileDashboard.jsx'
 import MobileMenuScreen from './pages/mobile/MobileMenuScreen.jsx'
 import MobileLog from './pages/mobile/MobileLog.jsx'
@@ -59,6 +60,7 @@ function DesktopApp() {
         <Route path="/workout/log" element={<WorkoutLog />} />
         <Route path="/workout/routine" element={<WorkoutRoutine />} />
         <Route path="/workout/exercises" element={<WorkoutExercises />} />
+        <Route path="/workout/settings" element={<WorkoutSettings />} />
       </Routes>
     </Layout>
   )

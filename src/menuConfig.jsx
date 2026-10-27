@@ -1,4 +1,4 @@
-import { Dumbbell, LayoutDashboard, ClipboardList, ListChecks, Tags } from 'lucide-react'
+import { Dumbbell, LayoutDashboard, ClipboardList, ListChecks, Tags, Settings } from 'lucide-react'
 
 export const ALL_MENUS = [
   {
@@ -10,6 +10,7 @@ export const ALL_MENUS = [
       { id: 'workout_log', label: '기록', path: '/workout/log', icon: ClipboardList },
       { id: 'workout_routine', label: '루틴', path: '/workout/routine', icon: ListChecks },
       { id: 'workout_exercises', label: '운동 리스트', path: '/workout/exercises', icon: Tags },
+      { id: 'workout_settings', label: '설정', path: '/workout/settings', icon: Settings },
     ],
   },
 ]

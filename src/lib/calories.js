@@ -15,7 +15,7 @@
 import { getRecentMaxWeight } from './workoutMetrics.js'
 
 // ── 조정 가능한 값 ─────────────────────────────────────────────
-export const CALORIE_CALIBRATION = 1.0 // 전체 결과에 곱하는 보정 계수. 실측과 비교해 맞춘다 (예: 늘 15% 낮게 나오면 1.15)
+export const CALORIE_CALIBRATION = 1.0 // 기본 보정 계수. 사용자는 설정에서 직접 바꾼다(settings.calorieCalibration) — 아래 함수들의 calibration 인자로 들어온다. 실측과 비교해 맞춘다 (예: 늘 15% 낮게 나오면 1.15)
 
 const MET_MIN = 3.5 // 가벼운 다종목 웨이트
 const MET_MAX = 6.0 // 격렬한 웨이트
@@ -93,21 +93,21 @@ const isDone = l => l.isCompleted && l.performedSets?.length > 0
 
 // 운동 기록 하나의 소모 칼로리. 완료하지 않았거나 세트 기록이 없거나 체중을 모르면 null. 소수 첫째 자리까지.
 // 이 값을 운동 기록(workout_logs.kcal)에 저장한다 — 저장하면 나중에 최고 무게·체중·보정 계수가 바뀌어도 그날 값은 변하지 않는다.
-export function estimateLogKcal(log, allLogs, bodyWeightKg) {
+export function estimateLogKcal(log, allLogs, bodyWeightKg, calibration = CALORIE_CALIBRATION) {
   if (!isDone(log) || !bodyWeightKg) return null
-  const kcal = logMet(log, allLogs, bodyWeightKg) * bodyWeightKg * (logSeconds(log, allLogs) / 3600) * CALORIE_CALIBRATION
+  const kcal = logMet(log, allLogs, bodyWeightKg) * bodyWeightKg * (logSeconds(log, allLogs) / 3600) * calibration
   return Math.round(kcal * 10) / 10
 }
 
 // 하루(날짜) 소모 칼로리 = 그날 완료한 운동들의 저장된 칼로리 합. 저장값이 없는 기록(이 기능 이전 기록)은 체중으로 즉석 계산한다.
 // 하나라도 값을 구할 수 없으면(저장값 없고 체중도 모름) 부분 합계로 오해하지 않게 null. 그날 완료한 운동이 없어도 null.
 // 5kcal 단위로 반올림해서 실제 정밀도보다 정확해 보이지 않게 한다.
-export function estimateDayKcal(date, allLogs, bodyWeightKg) {
+export function estimateDayKcal(date, allLogs, bodyWeightKg, calibration = CALORIE_CALIBRATION) {
   const dayLogs = allLogs.filter(l => l.date === date && isDone(l))
   if (!dayLogs.length) return null
   let sum = 0
   for (const l of dayLogs) {
-    const kcal = l.kcal ?? estimateLogKcal(l, allLogs, bodyWeightKg)
+    const kcal = l.kcal ?? estimateLogKcal(l, allLogs, bodyWeightKg, calibration)
     if (kcal == null) return null
     sum += kcal
   }
@@ -119,23 +119,23 @@ export function estimateDayKcal(date, allLogs, bodyWeightKg) {
 //  - 이미 값이 있고 날짜·세트 기록이 안 바뀌었으면 그대로 둔다 (과거 값이 흔들리지 않게)
 //  - 새로 완료했거나 수정했거나 값이 비어 있으면 그 시점의 체중으로 계산
 // 체중을 모르면 null로 두고, 체중이 생긴 뒤 다음 저장 때 채워진다.
-export function applyKcal(next, prev, { bodyRecords, profileWeightKg }) {
+export function applyKcal(next, prev, { bodyRecords, profileWeightKg, calibration = CALORIE_CALIBRATION }) {
   const prevById = new Map(prev.map(l => [l.id, l]))
   return next.map(l => {
     if (!isDone(l)) return l.kcal == null ? l : { ...l, kcal: null }
     const before = prevById.get(l.id)
     const unchanged = before && isDone(before) && before.date === l.date && JSON.stringify(before.performedSets) === JSON.stringify(l.performedSets)
     if (unchanged && l.kcal != null) return l
-    const kcal = estimateLogKcal(l, next, bodyWeightOn(l.date, bodyRecords, profileWeightKg))
+    const kcal = estimateLogKcal(l, next, bodyWeightOn(l.date, bodyRecords, profileWeightKg), calibration)
     return kcal === (l.kcal ?? null) ? l : { ...l, kcal }
   })
 }
 
 // 날짜별 소모 칼로리 목록(오래된 순) — 추이 그래프용
-export function kcalByDate(allLogs, bodyRecords, profileWeightKg) {
+export function kcalByDate(allLogs, bodyRecords, profileWeightKg, calibration = CALORIE_CALIBRATION) {
   const dates = [...new Set(allLogs.filter(isDone).map(l => l.date))].sort()
   return dates
-    .map(date => ({ date, kcal: estimateDayKcal(date, allLogs, bodyWeightOn(date, bodyRecords, profileWeightKg)) }))
+    .map(date => ({ date, kcal: estimateDayKcal(date, allLogs, bodyWeightOn(date, bodyRecords, profileWeightKg), calibration) }))
     .filter(d => d.kcal != null)
 }
 

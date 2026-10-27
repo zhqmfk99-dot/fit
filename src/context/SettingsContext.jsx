@@ -5,16 +5,19 @@ import { EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
 
 // 앱 설정 — 계정(profiles.settings)에 저장해서 기기를 바꿔도 같게 한다. (supabase/user_settings.sql)
 // SQL을 아직 실행하지 않았으면(칼럼이 없으면) 이 기기(localStorage)에만 저장한다. 기기 저장본은 항상 캐시로도 쓴다.
-export const SETTING_LIMITS = { restMin: 30, restMax: 300, restStep: 15 }
+export const SETTING_LIMITS = { restMin: 30, restMax: 300, restStep: 15, calMin: 0.5, calMax: 1.5, calStep: 0.05 }
 const SAVE_DELAY_MS = 600
 export const LAST_THEME_KEY = 'fit-last-theme'
 export const DEFAULT_SETTINGS = {
   theme: 'system', // 'system' | 'light' | 'dark'
   defaultRestSeconds: 90, // 루틴에 휴식을 안 적었을 때 쓰는 세트 간 휴식
   keepAwake: true, // 운동 중 화면 꺼짐 방지
+  restAlertVibrate: true, // 휴식이 끝나면 진동 (지원하는 기기만)
+  restAlertSound: false, // 휴식이 끝나면 비프음
   autoProgression: true, // 운동을 끝내면 다음 목표(세트·횟수·무게)를 루틴에 자동 반영
   aiUseHistory: true, // AI 루틴 만들기: 내 운동 기록 참고
   aiUseBody: false, // AI 루틴 만들기: 체형 정보 전송 (건강 정보라 기본 끔)
+  calorieCalibration: 1.0, // 소모 칼로리 보정 계수(시계 값과 비교해 직접 맞춘다). 새로 저장되는 기록부터 적용된다.
   myEquipment: [], // 내 운동기구(쓸 수 있는 기구) — AI 루틴 만들기의 "사용할 장비"에 자동 선택된다. 비면 전체. 맨몸은 기구가 필요 없어 항상 포함이라 저장하지 않는다.
 }
 
@@ -27,9 +30,12 @@ export function sanitizeSettings(raw) {
     theme: ['system', 'light', 'dark'].includes(r.theme) ? r.theme : DEFAULT_SETTINGS.theme,
     defaultRestSeconds: Number.isFinite(rest) ? Math.min(SETTING_LIMITS.restMax, Math.max(SETTING_LIMITS.restMin, Math.round(rest))) : DEFAULT_SETTINGS.defaultRestSeconds,
     keepAwake: bool(r.keepAwake, DEFAULT_SETTINGS.keepAwake),
+    restAlertVibrate: bool(r.restAlertVibrate, DEFAULT_SETTINGS.restAlertVibrate),
+    restAlertSound: bool(r.restAlertSound, DEFAULT_SETTINGS.restAlertSound),
     autoProgression: bool(r.autoProgression, DEFAULT_SETTINGS.autoProgression),
     aiUseHistory: bool(r.aiUseHistory, DEFAULT_SETTINGS.aiUseHistory),
     aiUseBody: bool(r.aiUseBody, DEFAULT_SETTINGS.aiUseBody),
+    calorieCalibration: Number.isFinite(Number(r.calorieCalibration)) ? Math.min(SETTING_LIMITS.calMax, Math.max(SETTING_LIMITS.calMin, Math.round(Number(r.calorieCalibration) * 20) / 20)) : DEFAULT_SETTINGS.calorieCalibration,
     myEquipment: Array.isArray(r.myEquipment) ? [...new Set(r.myEquipment.filter(e => EQUIPMENT_OPTIONS.includes(e) && e !== '맨몸'))] : [],
   }
 }

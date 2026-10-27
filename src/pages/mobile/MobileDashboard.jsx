@@ -6,6 +6,7 @@ import StatCard from '../../components/mobile/StatCard.jsx'
 import MuscleFatigueMap from '../../components/mobile/MuscleFatigueMap.jsx'
 import BodyTrendChart from '../../components/mobile/BodyTrendChart.jsx'
 import CalorieTrendChart from '../../components/mobile/CalorieTrendChart.jsx'
+import WeeklyReportCard from '../../components/mobile/WeeklyReportCard.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { totalVolume } from '../../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../../lib/muscleMap.js'
@@ -45,6 +46,8 @@ export default function MobileDashboard() {
           <StatCard label="총 볼륨" value={totalVolumeSum.toLocaleString()} unit="kg" icon={TrendingUp} color="text-indigo-600" />
           <StatCard label="평균 피로도" value={avgFatigue} unit="/5" icon={Flame} color="text-orange-500" />
         </div>
+
+        <WeeklyReportCard />
 
         <BodyTrendChart records={bodyRecords} />
 

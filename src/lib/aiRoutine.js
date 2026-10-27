@@ -8,9 +8,13 @@ import { calcBmi } from './bodyMetrics.js'
 
 export const AI_GOALS = ['근비대', '근력', '체지방 감량', '체력 유지']
 export const AI_LEVELS = ['초보', '중급', '상급']
-export const AI_FOCUS = ['전신', '상체', '하체', '밀기(가슴·어깨·삼두)', '당기기(등·이두)', '코어']
+// 큰 분류. 상체는 밀기·당기기를 포함하므로 겹쳐 고르면 중복이 된다(여러 개 선택은 허용). 더 구체적으로 정하려면 "세부 부위"를 쓴다.
+export const AI_FOCUS = ['전신', '상체', '하체', '밀기(가슴·어깨·삼두)', '당기기(등·이두)', '어깨', '팔(이두·삼두)', '코어']
 export const AI_MINUTES = [30, 45, 60, 90]
 export const AI_NOTES_MAX = 200
+export const AI_INSTRUCTION_MAX = 200
+// 루틴 수정 요청 상자의 빠른 문구(누르면 입력칸에 채워진다)
+export const AI_REFINE_SUGGESTIONS = ['운동 수를 줄여 주세요', '조금 더 쉽게 해 주세요', '하체 운동을 늘려 주세요', '코어 운동을 추가해 주세요']
 
 export const AI_MAX_INCLUDE = 5
 export const AI_MIN_CANDIDATES = 4 // 후보 운동이 이보다 적으면 루틴을 만들 수 없다고 보고 호출하지 않는다
@@ -132,7 +136,9 @@ export async function requestRoutineDraft(conditions, exercises, extra = {}) {
 
   // 장비·부위·빼고 싶은 운동을 반영한 후보 목록. 너무 적으면 호출하지 않는다(호출 한도·비용 낭비 방지).
   const slugs = conditions.muscles || []
-  const catalog = buildCatalogPayload(exercises, conditions.equipment || [], extra.avoid || [], extra.include || [], slugs)
+  // 수정 요청이면 지금 루틴의 운동은 장비·부위 필터와 상관없이 목록에 남겨 둔다(그래야 서버가 현재 루틴을 알아볼 수 있다)
+  const keepIds = [...(extra.include || []), ...(extra.current || []).map(c => c.id)]
+  const catalog = buildCatalogPayload(exercises, conditions.equipment || [], extra.avoid || [], keepIds, slugs)
   if (catalog.length < AI_MIN_CANDIDATES) {
     throw new Error(`조건에 맞는 운동이 ${catalog.length}개뿐이라 루틴을 만들기 어려워요. 장비나 세부 부위를 넓히거나, 운동 리스트에 운동을 더 등록해 주세요.`)
   }
@@ -151,6 +157,8 @@ export async function requestRoutineDraft(conditions, exercises, extra = {}) {
         notes: conditions.notes,
         exercises: catalog,
         include: extra.include || [],
+        current: extra.current || undefined,
+        instruction: extra.instruction || undefined,
         history: extra.history || null,
         body: extra.body || null,
       }),
@@ -182,4 +190,35 @@ export function buildRoutineDraft(result, exercises, logs, repeatDays) {
     })
   if (items.length) items[items.length - 1].linkedToNext = false
   return { name: result.name, isActive: true, repeatDays, exercises: items, note: result.summary || '' }
+}
+
+// ── 루틴 수정 요청(채팅형 다듬기) ───────────────────────────────
+
+// 지금 등록 화면의 운동 행들 → 서버로 보낼 현재 루틴(운동 리스트에 있는 이름만 id로 바꿔서)
+export function currentForRefine(rows, exercises) {
+  return rows
+    .filter(r => r.exercise?.trim())
+    .map(r => {
+      const e = exercises.find(c => c.name === r.exercise.trim())
+      return e ? { id: e.id, sets: Number(r.sets) || 3, reps: Number(r.reps) || 8, restSeconds: Number(r.restSeconds) || 60, linkedToNext: !!r.linkedToNext } : null
+    })
+    .filter(Boolean)
+}
+
+// 수정된 서버 결과를 지금 화면의 행들과 합친다.
+//  - 이어지는 운동은 사용자가 입력해 둔 무게를 그대로 둔다(AI는 무게를 바꾸지 않는다). 새로 들어온 운동의 무게는 내 기록에서, 없으면 빈칸.
+//  - 운동 리스트에 없는 이름(직접 입력한 운동)은 AI가 모르므로 맨 뒤에 그대로 붙인다.
+export function mergeRefined(result, rows, exercises, logs) {
+  const byId = new Map(exercises.map(e => [e.id, e]))
+  const items = (result.exercises || [])
+    .filter(e => byId.has(e.id))
+    .map(e => {
+      const name = byId.get(e.id).name
+      const old = rows.find(r => r.exercise?.trim() === name)
+      return { ...(old || {}), exercise: name, sets: e.sets, reps: e.reps, weight: old ? old.weight : (lastWeightFor(name, logs) ?? ''), restSeconds: e.restSeconds, linkedToNext: !!e.linkedToNext }
+    })
+  const unknown = rows.filter(r => r.exercise?.trim() && !exercises.some(c => c.name === r.exercise.trim()))
+  const all = [...items, ...unknown]
+  if (all.length) all[all.length - 1] = { ...all[all.length - 1], linkedToNext: false }
+  return all
 }

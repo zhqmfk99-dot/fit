@@ -1,3 +1,4 @@
+import AiRefineBox from './AiRefineBox.jsx'
 import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useState, useMemo } from 'react'
 import { GripVertical } from 'lucide-react'
@@ -37,6 +38,9 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
   const [repeatDays, setRepeatDays] = useState(init?.repeatDays || [])
   const [exercises, setExercises] = useState(init?.exercises?.map(e => ({ ...e })) || [emptyExercise()])
   const [errorMsg, setErrorMsg] = useState('')
+  // AI 초안 설명(수정 요청을 하면 새 설명으로 바뀐다)과, 방금 수정 되돌리기용 이전 운동 행
+  const [aiNote, setAiNote] = useState(draftNote)
+  const [undoRows, setUndoRows] = useState(null)
   const [dragIndex, setDragIndex] = useState(null)
   const [dropdownIdx, setDropdownIdx] = useState(null)
 
@@ -142,9 +146,25 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
           {draft && (
             <div className="bg-blue-50 text-letusBlue text-m-caption font-bold p-3 rounded border border-blue-100 leading-relaxed">
               ✨ AI가 만든 초안이에요. 운동·무게를 확인하고 고친 뒤 저장해 주세요.
-              {draftNote && <div className="mt-1 font-normal text-gray-600">{draftNote}</div>}
+              {aiNote && <div className="mt-1 font-normal text-gray-600">{aiNote}</div>}
               <div className="mt-1 font-normal text-gray-600">무게는 AI가 정하지 않아요. 비어 있는 운동은 직접 입력해 주세요. 처음 하는 운동은 10회를 2~3회 남기고 할 수 있는 가벼운 무게에서 시작하세요.</div>
             </div>
+          )}
+          {draft?.request && (
+            <AiRefineBox
+              request={draft.request}
+              rows={exercises}
+              canUndo={!!undoRows}
+              onUndo={() => {
+                setExercises(undoRows)
+                setUndoRows(null)
+              }}
+              onApply={(rows, summary) => {
+                setUndoRows(exercises)
+                setExercises(rows)
+                if (summary) setAiNote(summary)
+              }}
+            />
           )}
           {errorMsg && (
             <div className="bg-red-50 text-red-600 text-m-body font-bold p-3 rounded border border-red-100 flex items-center gap-1.5">

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase.js'
 import { generateScheduledLogs } from '../lib/scheduleGenerator.js'
 import { applyKcal } from '../lib/calories.js'
 import { useAuth } from './AuthContext.jsx'
+import { useSettings } from './SettingsContext.jsx'
 
 const WorkoutLogsContext = createContext(null)
 
@@ -141,6 +142,7 @@ function usePersistedState(table, toRow, queueRef, onError, transform) {
 export function WorkoutLogsProvider({ children }) {
   const queueRef = useRef(Promise.resolve())
   const { user } = useAuth()
+  const { settings } = useSettings() // 소모 칼로리 보정 계수
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   // "내 정보"의 체중 — 신체 기록이 없을 때 칼로리 계산에 쓰는 대체값. 부가 정보라 조회에 실패해도 무시한다.
@@ -181,7 +183,7 @@ export function WorkoutLogsProvider({ children }) {
   const [routines, setRoutines, replaceRoutines] = usePersistedState('routines', routineToRow, queueRef, handleError)
   const [exercises, setExercises, replaceExercises] = usePersistedState('exercises', exerciseToRow, queueRef, handleError)
   const [bodyRecords, setBodyRecords, replaceBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleError)
-  weightSourceRef.current = { bodyRecords, profileWeightKg }
+  weightSourceRef.current = { bodyRecords, profileWeightKg, calibration: settings.calorieCalibration }
 
   useEffect(() => {
     let cancelled = false

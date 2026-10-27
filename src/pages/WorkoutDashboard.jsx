@@ -6,6 +6,7 @@ import StatCard from '../components/StatCard.jsx'
 import MuscleFatigueMap from '../components/web/MuscleFatigueMap.jsx'
 import BodyTrendChart from '../components/BodyTrendChart.jsx'
 import CalorieTrendChart from '../components/web/CalorieTrendChart.jsx'
+import WeeklyReportCard from '../components/web/WeeklyReportCard.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { totalVolume } from '../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../lib/muscleMap.js'
@@ -44,6 +45,8 @@ export default function WorkoutDashboard() {
           <StatCard horizontal label="총 볼륨" value={totalVolumeSum.toLocaleString()} unit="kg" icon={TrendingUp} color="text-indigo-600" />
           <StatCard horizontal label="평균 피로도" value={avgFatigue} unit="/5" icon={Flame} color="text-orange-500" />
         </div>
+
+        <WeeklyReportCard />
 
         <BodyTrendChart records={bodyRecords} />
 
