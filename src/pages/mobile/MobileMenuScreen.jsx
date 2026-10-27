@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ClipboardList, ListChecks, Tags, Play, LogOut, User } from 'lucide-react'
-import ProfileModal from '../../components/ProfileModal.jsx'
+import { LayoutDashboard, ClipboardList, ListChecks, Tags, Play, Settings } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
-import { useAuth } from '../../context/AuthContext.jsx'
 import QuickWorkoutModal from './QuickWorkoutModal.jsx'
 import { targetRepsOf } from '../../lib/progression.js'
+import { useSettings } from '../../context/SettingsContext.jsx'
 
 const MENU_ITEMS = [
   { path: '/mobile/dashboard', label: '대시보드', icon: LayoutDashboard, iconBg: 'bg-blue-50', iconColor: 'text-letusBlue' },
@@ -23,9 +22,8 @@ const getLocalDateString = d => {
 export default function MobileMenuScreen() {
   const navigate = useNavigate()
   const { logs, setLogs, routines, setRoutines } = useWorkoutLogs()
-  const { signOut } = useAuth()
+  const { settings } = useSettings()
   const [showQuickModal, setShowQuickModal] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
 
   const todayDate = getLocalDateString(new Date())
 
@@ -61,7 +59,7 @@ export default function MobileMenuScreen() {
       targetSets: ex.sets,
       targetReps: targetRepsOf(ex),
       targetWeight: ex.weight,
-      restSeconds: ex.restSeconds ?? 90,
+      restSeconds: ex.restSeconds ?? settings.defaultRestSeconds,
       linkedToNext: !!ex.linkedToNext,
       performedSets: [],
       fatigue: null,
@@ -92,15 +90,10 @@ export default function MobileMenuScreen() {
           <h1 className="text-xl font-black text-gray-800">TRAINING</h1>
           <p className="text-m-caption text-gray-400 font-bold mt-1">개인용 트레이닝 앱</p>
         </div>
-        <div className="flex items-center -mr-2">
-          <button onClick={() => setShowProfile(true)} className="flex items-center gap-1 text-m-caption font-bold text-gray-400 active:text-letusBlue px-2.5 h-10">
-            <User className="w-4 h-4" />내 정보
-          </button>
-          <button onClick={signOut} className="flex items-center gap-1 text-m-caption font-bold text-gray-400 active:text-letusBlue px-2.5 h-10">
-            <LogOut className="w-4 h-4" />
-            로그아웃
-          </button>
-        </div>
+        <button onClick={() => navigate('/mobile/settings')} className="flex items-center gap-1 text-m-caption font-bold text-gray-400 active:text-letusBlue px-2.5 h-10 -mr-2">
+          <Settings className="w-4 h-4" />
+          설정
+        </button>
       </div>
 
       <button
@@ -130,8 +123,6 @@ export default function MobileMenuScreen() {
           </button>
         ))}
       </div>
-
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
 
       {showQuickModal && (
         <QuickWorkoutModal

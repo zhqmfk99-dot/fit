@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { GripVertical } from 'lucide-react'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
+import { useSettings } from '../context/SettingsContext.jsx'
 import { getKnownExerciseNames } from '../lib/muscleMap.js'
 import { buildTagIndex, matchesQuery, aliasMatch } from '../lib/exerciseSearch.js'
 
@@ -26,6 +27,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
   const isEdit = !!row
   const init = row ?? draft
   const { routines, exercises: exerciseCatalog } = useWorkoutLogs()
+  const { settings } = useSettings()
   const knownExercises = useMemo(() => getKnownExerciseNames(routines, exerciseCatalog), [routines, exerciseCatalog])
 
   const [name, setName] = useState(init?.name || '')
@@ -89,7 +91,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
         sets: Number(e.sets) || 0,
         reps: Number(e.reps) || 0,
         weight: Number(e.weight) || 0,
-        restSeconds: Number(e.restSeconds) || 90,
+        restSeconds: Number(e.restSeconds) || settings.defaultRestSeconds,
         ...(Number(e.repsMax) > 0 ? { repsMax: Number(e.repsMax) } : {}),
         ...(Number(e.progressReps) > 0 ? { progressReps: Number(e.progressReps) } : {}),
         linkedToNext: !!e.linkedToNext,
@@ -286,7 +288,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
                         value={ex.restSeconds}
                         onChange={e => updateExercise(idx, 'restSeconds', e.target.value)}
                         placeholder="휴식(초)"
-                        title="세트간 휴식시간(초), 기본 90초"
+                        title={`세트간 휴식시간(초), 비우면 기본 ${settings.defaultRestSeconds}초 (설정에서 바꿀 수 있어요)`}
                         className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-m-body focus:outline-none focus:border-letusOrange"
                       />
                     </div>

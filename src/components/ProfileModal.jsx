@@ -24,7 +24,7 @@ function calcBmi(heightCm, weightKg) {
 }
 
 export default function ProfileModal({ onClose }) {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -91,18 +91,6 @@ export default function ProfileModal({ onClose }) {
     onClose()
   }
 
-  const handleWithdraw = async () => {
-    if (!confirm('정말 탈퇴할까요?\n운동 기록, 루틴, 운동 리스트 등 모든 데이터가 삭제되며 되돌릴 수 없습니다.')) return
-    setBusy(true)
-    setMessage('')
-    const { error } = await supabase.rpc('delete_my_account')
-    if (error) {
-      setBusy(false)
-      return setMessage(error.message)
-    }
-    await signOut()
-  }
-
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[420px] max-h-[90vh] overflow-hidden flex flex-col">
@@ -160,10 +148,7 @@ export default function ProfileModal({ onClose }) {
           )}
         </div>
 
-        <div className="p-5 border-t border-gray-100 flex items-center justify-between">
-          <button onClick={handleWithdraw} disabled={busy || loading} className="text-m-caption font-bold text-gray-400 hover:text-red-500 disabled:opacity-60">
-            회원 탈퇴
-          </button>
+        <div className="p-5 border-t border-gray-100 flex items-center justify-end">
           <button onClick={handleSave} disabled={busy || loading} className="bg-letusBlue text-white text-m-body font-black rounded-lg px-6 py-2 disabled:opacity-60">
             {busy ? '저장 중...' : '저장'}
           </button>

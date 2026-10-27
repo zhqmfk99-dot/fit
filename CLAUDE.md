@@ -19,6 +19,7 @@ React + Vite + Tailwind, 데이터/인증은 Supabase, 배포는 Vercel.
 | 운동 리스트 | `pages/WorkoutExercises.jsx` | `pages/mobile/MobileExercises.jsx` |
 | 메인 메뉴 | 사이드바 | `pages/mobile/MobileMenuScreen.jsx` |
 | 운동 진행 | 없음 | `pages/mobile/WorkoutSession.jsx`, `QuickWorkoutModal.jsx` |
+| 설정 | 없음(헤더의 내 정보·로그아웃 그대로) | `pages/mobile/MobileSettings.jsx` (`/mobile/settings`) |
 
 라우팅은 `src/App.jsx`의 `DesktopApp` / `MobileApp`으로 나뉜다.
 폭 768px 미만에서 `/`로 들어오면 `/mobile`로 보낸다.
@@ -71,7 +72,7 @@ PWA(모바일) 화면은 터치 화면이라 웹앱보다 크게 잡은 별도 �
 - 데이터 상태는 `WorkoutLogsContext`가 불러오고 저장한다. `setLogs`/`setRoutines`/`setExercises`는 `useState` setter처럼 쓰되 변경분이 자동으로 Supabase에 저장된다.
 - 모든 ID는 UUID(`crypto.randomUUID()`).
 - 로그인: 이메일(=아이디)+비밀번호. 비밀번호 최소 6자. 아이디/비밀번호 찾기, 비밀번호 재설정, 내 정보, 회원 탈퇴 포함.
-- SQL: `supabase/schema.sql` → `auth_profiles.sql` → `profile_fields.sql` → `body_records.sql` → `seed_exercises.sql`(기본 운동 120개 + `exercises`의 동작 패턴·운동 유형·태그 칼럼, 신규 가입자 자동 지급 트리거 포함) → `log_kcal.sql`(운동 기록의 소모 칼로리 칼럼) 순서로 한 번씩 실행. `seed_exercises.sql`은 앱 배포 **전에** 실행해야 한다(새 칼럼이 없으면 운동 저장이 실패한다). `log_kcal.sql`도 배포 전에 실행하는 것이 맞지만, 칼럼이 없을 때는 앱이 칼로리를 저장하지 않고 화면에서 즉석 계산만 하도록 방어해 두어 운동 기록 저장은 깨지지 않는다.
+- SQL: `supabase/schema.sql` → `auth_profiles.sql` → `profile_fields.sql` → `body_records.sql` → `seed_exercises.sql`(기본 운동 120개 + `exercises`의 동작 패턴·운동 유형·태그 칼럼, 신규 가입자 자동 지급 트리거 포함) → `log_kcal.sql`(운동 기록의 소모 칼로리 칼럼) → `ai_usage.sql`(AI 호출 횟수 기록) → `user_settings.sql`(앱 설정을 계정에 저장, 없으면 기기에만 저장) 순서로 한 번씩 실행. `seed_exercises.sql`은 앱 배포 **전에** 실행해야 한다(새 칼럼이 없으면 운동 저장이 실패한다). `log_kcal.sql`도 배포 전에 실행하는 것이 맞지만, 칼럼이 없을 때는 앱이 칼로리를 저장하지 않고 화면에서 즉석 계산만 하도록 방어해 두어 운동 기록 저장은 깨지지 않는다.
 - 운동(`exercises`)에는 이름(정식 명칭), 부위, 장비, 동작 패턴(밀기/당기기/스쿼트/힌지/런지/코어/기타), 운동 유형(복합관절/단관절), 태그(별칭)가 있다. 동작 패턴·유형·태그는 PWA 수정 폼이 모르는 값이라 `useExerciseManager`가 기존 값 위에 덮어쓰는 방식으로 저장한다(통째로 교체하면 지워짐).
 
 ## 소모 칼로리 추정
@@ -88,6 +89,15 @@ PWA(모바일) 화면은 터치 화면이라 웹앱보다 크게 잡은 별도 �
 - 하루 총 시간 = 그날 완료한 세트들의 구간을 합친 길이(`lib/workoutTime.js`의 `dayDurationSeconds`, 훅 `hooks/useDayDuration.js`). 세트·운동 사이 간격이 15분 이하면 운동 시간에 포함하고, 그보다 길면(중간에 쉰 구간) 뺀다.
 - 시각이 없는 기록(이 기능 이전, 직접 입력)은 계산에서 빠지고, 하루에 시각이 하나도 없으면 표시하지 않는다. 과거 기록은 채울 수 없다.
 - 표시: 웹앱 기록 화면(오른쪽 카드 날짜 줄), PWA 기록 화면(날짜 줄), PWA 운동 완료 화면. 칼로리 계산에는 `logSeconds`가 실측 시각으로 운동 시작 전 준비 시간(직전 세트 종료~첫 세트 시작, 최대 300초)을 반영한다. 시각이 없거나 그날 첫 운동이면 60초 가정값.
+
+## 설정 (PWA 전용) + 다크 모드
+- 메인 메뉴 오른쪽 위 "설정" → `MobileSettings`. 그룹: 화면(테마 시스템/라이트/다크), 계정(아이디 표시·내 정보·비밀번호 변경·로그아웃), 운동(기본 휴식 시간 30~300초·운동 중 화면 꺼짐 방지·점진 과부하 자동 적용), AI 루틴 만들기(내 운동 기록 참고·체형 정보 전송·최근 24시간 사용 횟수), 앱 정보(실행 상태 앱/브라우저·설치 안내), 위험 영역(회원 탈퇴). 메인 메뉴의 "내 정보"·"로그아웃" 버튼은 설정 안으로 옮겼고, PWA 내 정보 창의 회원 탈퇴 버튼도 설정으로 옮겼다. 웹앱은 이 화면이 없다(헤더의 내 정보·로그아웃 그대로).
+- 저장: `context/SettingsContext.jsx`(`SettingsProvider`는 `App.jsx`에서 로그인 후 전체를 감싼다). **계정(`profiles.settings` jsonb)에 저장**해 기기를 바꿔도 같고(`supabase/user_settings.sql`), SQL을 안 돌렸으면 이 기기 `localStorage`(`fit-settings:<userId>`)에만 저장한다(설정 화면 하단에 안내). 기기 저장본은 항상 캐시로 쓴다. 로드 시 계정에 값이 있으면 계정이 이기고, 계정이 비어 있고 기기에 있으면 기기 설정을 계정으로 올린다. 계정 저장은 마지막 변경 600ms 뒤에 한 번만 보내고(연타 방지) 앱이 가려질 때는 즉시 보낸다. 값은 `sanitizeSettings`가 항목마다 형식·범위를 맞춘다. 기본값: 테마 시스템·기본 휴식 90초·화면 꺼짐 방지 켬·점진 과부하 자동 적용 켬·AI 기록 참고 켬·AI 체형 전송 끔.
+- 설정이 쓰이는 곳: 기본 휴식 시간 → `WorkoutSession`(루틴에 휴식이 없을 때)·`MobileMenuScreen`·`QuickWorkoutModal`·PWA `RoutineFormModal`(비웠을 때 저장값). 화면 꺼짐 방지 → `WorkoutSession` Wake Lock. 점진 과부하 자동 적용 → `WorkoutSession`의 `applyProgression` 호출 여부(끄면 목표를 자동으로 안 바꾸고, 시작 화면의 "추천 적용" 버튼으로 직접 적용). AI 개인화 기본값 → **PWA** `AiRoutineModal`(웹앱 모달은 예전대로 기기 `localStorage` `fit-ai-routine-prefs` 사용, 서로 연결되지 않음).
+- **다크 모드는 PWA(`/mobile`) 화면에서만** 적용된다. `App.jsx`의 `MobileApp`(`useApplyTheme`)이 `<html class="dark">`를 붙이고(떠나면 뗌, 상태 표시줄 `theme-color`도 맞춤) 웹앱은 항상 라이트다. "시스템"은 기기의 `prefers-color-scheme`을 따르며, 앱이 다시 보일 때(`visibilitychange`·`focus`)도 다시 읽는다.
+- **색 구조(중요)**: 화면마다 `dark:` 클래스를 붙이지 않는다. `tailwind.config.js`가 `bg-white`·`bg-gray-*`·`text-gray-*`·`border-*` 와 pastel 색(`blue/red/orange/emerald/…-50~800`)을 **CSS 변수**(`--s-*` 배경·테두리, `--t-*` 글자)로 바꿔 두었고 `html.dark`일 때만 값이 바뀐다. 라이트 값은 Tailwind 원래 색을 `tailwindcss/colors`에서 읽어 오므로 웹앱·라이트 모드 색은 그대로다(132개 변수 원본과 일치 확인). `text-white`는 바꾸지 않는다(버튼 위 흰 글씨). 새 화면은 기존처럼 `bg-white`·`text-gray-800`·`bg-blue-50` 같은 **표준 Tailwind 색 클래스**를 쓰면 다크가 자동 적용된다. 목록에 없는 색 계열·단계(예: `bg-pink-100`)나 `#hex`/`style` 직접 색, 차트는 다크에서 안 바뀌니 `tailwind.config.js`의 `DARK` 표나 `src/index.css`(`html.dark ... recharts`)에 추가해야 한다. `text-blue-100` 위 `bg-letusBlue`(메뉴 운동하기 카드 보조 글씨)는 라이트·다크 모두 대비가 낮은 기존 상태.
+- `tailwind.config.js` 변경이라 **개발 서버를 재시작**해야 적용된다. `safelist: ['dark']`는 `html.dark` 규칙이 정리되지 않게 하는 것이다.
+- 확인한 것: 설정 화면 항목·저장(기기/계정/SQL 미실행/계정 우선/기기→계정 업로드)·연타 저장 1회·비밀번호 변경·로그아웃·탈퇴 확인창, 설정이 실제 동작에 반영(기본 휴식·화면 꺼짐 방지·점진 과부하), 다크 모드 PWA 화면(설정·메뉴·대시보드·기록·루틴·운동 리스트·모달)의 글자 대비 자동 검사, 웹앱 색이 그대로인 것, 시스템 테마 따라가기(재확인 경로). **실제 폰에서의 모양과 실시간 전환은 직접 확인하지 못했다.**
 
 ## 점진 과부하 (이중 점진) — 수행 평가 → 다음 목표 추천
 - 규칙 기반이다(AI 아님). 같은 기록이면 항상 같은 결과이고 이유를 설명할 수 있다. 로직은 `lib/progression.js` 한 곳(웹앱·PWA 공용), 순수 함수 `evaluateSession`.

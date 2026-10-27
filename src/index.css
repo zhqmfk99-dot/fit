@@ -32,6 +32,34 @@
   }
 }
 
+/* 다크 모드(html.dark, PWA 화면에서만 붙음): 화면 배경, 그리고 코드에 색이 직접 박힌 차트·인체도 보정.
+   카드·글자 색은 tailwind.config.js의 색 변수가 처리한다. */
+html.dark {
+  background-color: rgb(var(--s-letusBg));
+}
+html.dark .recharts-cartesian-grid line {
+  stroke: #334155;
+}
+html.dark .recharts-cartesian-axis-tick-value,
+html.dark .recharts-legend-item-text {
+  fill: #94a3b8;
+  color: #cbd5e1 !important;
+}
+html.dark .recharts-cartesian-axis-line,
+html.dark .recharts-cartesian-axis-tick-line {
+  stroke: #475569;
+}
+html.dark .recharts-default-tooltip {
+  background-color: #1e293b !important;
+  border-color: #475569 !important;
+}
+html.dark .recharts-tooltip-label {
+  color: #e2e8f0;
+}
+html.dark .rbh polygon {
+  stroke: #475569;
+}
+
 /* react-body-highlighter는 근육 구역을 채우기만 하고 외곽선을 안 그린다 — 구역 경계가 보이게 직접 추가 */
 .rbh polygon {
   stroke: #94a3b8;

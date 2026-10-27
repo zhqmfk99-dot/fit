@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X, Check, Link2 } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
+import { useSettings } from '../../context/SettingsContext.jsx'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
 import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
@@ -18,7 +19,6 @@ const VERDICT_STYLE = {
 }
 const kgLabel = w => (w ? `${w}kg` : '맨몸')
 
-const DEFAULT_REST_SECONDS = 90
 // 세션이 끝나거나 종료할 때 돌아갈 곳 — 모바일 기록 화면 (데스크탑 경로 /workout/log로 가면 헤더 없는 데스크탑 화면이 열린다)
 const LOG_PATH = '/mobile/log'
 
@@ -134,6 +134,7 @@ export default function WorkoutSession() {
   const routineId = searchParams.get('routineId')
   const date = searchParams.get('date')
   const { logs, setLogs, routines, setRoutines, exercises: exerciseCatalog } = useWorkoutLogs()
+  const { settings } = useSettings() // 기본 휴식 시간·화면 꺼짐 방지·점진 과부하 자동 적용
   const dayKcal = useDayKcal(date)
   const daySeconds = useDayDuration(date)
 
@@ -173,8 +174,8 @@ export default function WorkoutSession() {
   const [setForm, setSetForm] = useState(null)
   const [setStartAt, setSetStartAt] = useState(null)
   const [pendingRestBefore, setPendingRestBefore] = useState(null)
-  const [restTotal, setRestTotal] = useState(DEFAULT_REST_SECONDS)
-  const [restRemaining, setRestRemaining] = useState(DEFAULT_REST_SECONDS)
+  const [restTotal, setRestTotal] = useState(settings.defaultRestSeconds)
+  const [restRemaining, setRestRemaining] = useState(settings.defaultRestSeconds)
   // 휴식 종료 시각(ms). 남은 시간은 이 값에서 계산한다 — 화면이 꺼지거나 탭이 백그라운드여도 시간이 정확하다.
   const [restEndAt, setRestEndAt] = useState(null)
   const [restNextAction, setRestNextAction] = useState(null)
@@ -219,8 +220,9 @@ export default function WorkoutSession() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subPhase, restRemaining])
 
-  // 운동 중에는 화면이 저절로 꺼지지 않게 한다 (지원하는 브라우저에서만)
+  // 운동 중에는 화면이 저절로 꺼지지 않게 한다 (지원하는 브라우저에서만, 설정에서 끌 수 있음)
   useEffect(() => {
+    if (!settings.keepAwake) return
     let lock = null
     let cancelled = false
     const acquire = async () => {
@@ -242,7 +244,7 @@ export default function WorkoutSession() {
       document.removeEventListener('visibilitychange', onVisible)
       lock?.release().catch(() => {})
     }
-  }, [])
+  }, [settings.keepAwake])
 
   if (!routine || totalCount === 0) {
     return (
@@ -376,10 +378,10 @@ export default function WorkoutSession() {
       const recentMax = getRecentMaxWeight(logs, currentLog.exercise)
       const fatigue = estimateExerciseFatigue(updatedForLog, recentMax)
       setLogs(prev => prev.map(l => (l.id === currentLog.id ? { ...l, performedSets: updatedForLog, fatigue, isCompleted: true } : l)))
-      applyProgression(currentLog, updatedForLog, fatigue)
+      if (settings.autoProgression) applyProgression(currentLog, updatedForLog, fatigue) // 끄면 목표를 자동으로 바꾸지 않는다(시작 화면의 추천을 보고 직접 적용)
     }
 
-    const restSeconds = currentLog.restSeconds || DEFAULT_REST_SECONDS
+    const restSeconds = currentLog.restSeconds || settings.defaultRestSeconds
     const nextStepIdx = stepCursor + 1
 
     if (nextStepIdx >= flatSteps.length) {

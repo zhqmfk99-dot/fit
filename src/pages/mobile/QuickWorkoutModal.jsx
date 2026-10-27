@@ -3,6 +3,7 @@ import { Plus, GripVertical } from 'lucide-react'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
 import { buildTagIndex, matchesQuery, aliasMatch } from '../../lib/exerciseSearch.js'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
+import { useSettings } from '../../context/SettingsContext.jsx'
 
 const ACCENT = 'bg-letusBlue'
 const emptyExercise = () => ({ exercise: '', sets: '', reps: '', weight: '', restSeconds: '', linkedToNext: false })
@@ -28,6 +29,7 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
   const [dropdownIdx, setDropdownIdx] = useState(null)
 
   const { exercises: exerciseCatalog } = useWorkoutLogs()
+  const { settings } = useSettings()
   const knownExercises = useMemo(() => getKnownExerciseNames(routines, exerciseCatalog), [routines, exerciseCatalog])
   // 이름뿐 아니라 태그(별칭)로도 찾는다. 선택하면 정식 명칭이 입력된다.
   const tagsByName = useMemo(() => buildTagIndex(exerciseCatalog), [exerciseCatalog])
@@ -70,7 +72,7 @@ export default function QuickWorkoutModal({ routines = [], onClose, onStartRouti
         sets: Math.max(1, Number(e.sets) || 1),
         reps: Number(e.reps) || 0,
         weight: Number(e.weight) || 0,
-        restSeconds: Number(e.restSeconds) || 90,
+        restSeconds: Number(e.restSeconds) || settings.defaultRestSeconds,
         linkedToNext: !!e.linkedToNext,
       }))
     if (cleaned.length > 0) cleaned[cleaned.length - 1].linkedToNext = false
