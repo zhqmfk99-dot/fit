@@ -131,14 +131,15 @@ export default function AiRoutineModal({ onClose, onDraft }) {
   const [focus, setFocus] = useState(['전신'])
   const [muscles, setMuscles] = useState([]) // 세부 부위(선택) — 고르면 그 부위를 쓰는 운동만 후보가 된다
   const [showMuscles, setShowMuscles] = useState(false)
-  const [equipment, setEquipment] = useState([])
+  const { settings, update } = useSettings()
+  // 설정의 "내 운동기구"가 있으면 자동 선택한다(맨몸은 기구가 필요 없어 함께). 이 모달에서 바꾸는 건 이번 생성에만 적용된다.
+  const [equipment, setEquipment] = useState(() => (settings.myEquipment.length ? [...new Set([...settings.myEquipment, '맨몸'])] : []))
   const [include, setInclude] = useState([])
   const [avoid, setAvoid] = useState([])
   const [repeatDays, setRepeatDays] = useState([])
   const [notes, setNotes] = useState('')
   // 개인화 체크박스(내 운동 기록 참고·체형 정보 전송)는 "설정"의 기본값을 쓰고, 여기서 바꾸면 설정에도 저장된다(계정에 저장).
   // 기본값: 운동 기록 참고 = 켬(운동 이름·부위 빈도만 보냄), 체형 정보 = 끔(건강 정보라서 직접 켜야 함)
-  const { settings, update } = useSettings()
   const prefs = { useHistory: settings.aiUseHistory, useBody: settings.aiUseBody }
   const setPref = (key, value) => update(key === 'useHistory' ? { aiUseHistory: value } : { aiUseBody: value })
 
@@ -232,7 +233,7 @@ export default function AiRoutineModal({ onClose, onDraft }) {
               </div>
             )}
           </div>
-          <Field label="사용할 장비" hint="아무것도 안 고르면 전체">
+          <Field label="사용할 장비" hint={settings.myEquipment.length ? "내 운동기구가 자동 선택됐어요 (설정에서 바꿔요)" : "아무것도 안 고르면 전체"}>
             <Pills options={EQUIPMENT_OPTIONS} value={equipment} onChange={setEquipment} multi />
           </Field>
           <Field label="꼭 넣고 싶은 운동" hint={`선택 · 최대 ${AI_MAX_INCLUDE}개`}>

@@ -5,6 +5,7 @@ import ProfileModal from '../../components/ProfileModal.jsx'
 import { useAuth, MIN_PASSWORD_LENGTH } from '../../context/AuthContext.jsx'
 import { useSettings, SETTING_LIMITS } from '../../context/SettingsContext.jsx'
 import { supabase } from '../../lib/supabase.js'
+import { EQUIPMENT_OPTIONS } from '../../lib/muscleMap.js'
 
 const THEME_OPTIONS = [
   { value: 'system', label: '시스템' },
@@ -198,6 +199,38 @@ export default function MobileSettings() {
             desc="운동을 끝내면 목표 달성 여부와 휴식·속도를 보고 다음에 무게를 올릴지 유지할지 정해서 루틴에 자동 반영해요. 끄면 직접 관리하고, 시작 화면의 추천은 보고 직접 적용할 수 있어요."
             right={<Switch checked={settings.autoProgression} onChange={v => update({ autoProgression: v })} label="점진 과부하 자동 적용" />}
           />
+        </Section>
+
+        <Section title="내 운동기구">
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-m-body font-bold text-gray-800">쓸 수 있는 기구</div>
+              {settings.myEquipment.length > 0 && (
+                <button type="button" onClick={() => update({ myEquipment: [] })} className="shrink-0 text-m-caption font-bold text-gray-500 underline">
+                  모두 해제
+                </button>
+              )}
+            </div>
+            <div className="mt-0.5 text-m-caption text-gray-400 leading-relaxed">
+              골라 두면 AI 루틴 만들기의 "사용할 장비"에 자동으로 선택돼요. 맨몸 운동은 기구가 필요 없어서 항상 포함돼요. 아무것도 안 고르면 모든 기구에서 골라요.
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="내 운동기구">
+              {EQUIPMENT_OPTIONS.filter(o => o !== '맨몸').map(o => {
+                const on = settings.myEquipment.includes(o)
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => update({ myEquipment: on ? settings.myEquipment.filter(e => e !== o) : [...settings.myEquipment, o] })}
+                    className={`px-3 min-h-[32px] rounded-full text-m-body font-bold transition-colors ${on ? 'bg-letusBlue text-white' : 'bg-gray-100 text-gray-500 active:bg-gray-200'}`}
+                  >
+                    {o}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </Section>
 
         <Section title="AI 루틴 만들기">

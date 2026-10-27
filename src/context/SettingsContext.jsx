@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from './AuthContext.jsx'
+import { EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
 
 // 앱 설정 — 계정(profiles.settings)에 저장해서 기기를 바꿔도 같게 한다. (supabase/user_settings.sql)
 // SQL을 아직 실행하지 않았으면(칼럼이 없으면) 이 기기(localStorage)에만 저장한다. 기기 저장본은 항상 캐시로도 쓴다.
@@ -14,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   autoProgression: true, // 운동을 끝내면 다음 목표(세트·횟수·무게)를 루틴에 자동 반영
   aiUseHistory: true, // AI 루틴 만들기: 내 운동 기록 참고
   aiUseBody: false, // AI 루틴 만들기: 체형 정보 전송 (건강 정보라 기본 끔)
+  myEquipment: [], // 내 운동기구(쓸 수 있는 기구) — AI 루틴 만들기의 "사용할 장비"에 자동 선택된다. 비면 전체. 맨몸은 기구가 필요 없어 항상 포함이라 저장하지 않는다.
 }
 
 // 저장된 값을 믿지 않고 항목마다 형식·범위를 맞춘다 (모르는 키는 버린다)
@@ -28,6 +30,7 @@ export function sanitizeSettings(raw) {
     autoProgression: bool(r.autoProgression, DEFAULT_SETTINGS.autoProgression),
     aiUseHistory: bool(r.aiUseHistory, DEFAULT_SETTINGS.aiUseHistory),
     aiUseBody: bool(r.aiUseBody, DEFAULT_SETTINGS.aiUseBody),
+    myEquipment: Array.isArray(r.myEquipment) ? [...new Set(r.myEquipment.filter(e => EQUIPMENT_OPTIONS.includes(e) && e !== '맨몸'))] : [],
   }
 }
 
