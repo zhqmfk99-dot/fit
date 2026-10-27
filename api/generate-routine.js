@@ -328,9 +328,15 @@ async function callGemini(apiKey, input) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: input.review ? REVIEW_SYSTEM_PROMPT : SYSTEM_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: input.review ? buildReviewPrompt(input) : buildUserPrompt(input) }] }],
-        generationConfig: input.review
-          ? { responseMimeType: 'application/json', responseSchema: REVIEW_SCHEMA, temperature: 0.3, maxOutputTokens: 6000 }
-          : { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, temperature: 0.5, maxOutputTokens: 4096 },
+        // 2.5 모델은 "생각" 토큰도 출력 한도(maxOutputTokens)에 들어가서, 한도가 작으면 생각만 하다 JSON이 중간에 잘릴 수 있다.
+        // 그래서 한도를 넉넉히 두고(8192) 생각에 쓰는 양도 제한한다(thinkingBudget).
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: input.review ? REVIEW_SCHEMA : RESPONSE_SCHEMA,
+          temperature: input.review ? 0.3 : 0.5,
+          maxOutputTokens: 8192,
+          thinkingConfig: { thinkingBudget: 1024 },
+        },
       }),
       signal: ctrl.signal,
     })
@@ -340,7 +346,8 @@ async function callGemini(apiKey, input) {
     }
     const data = await r.json()
     const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') ?? ''
-    return { text }
+    // finishReason(예: MAX_TOKENS = 한도에서 잘림)은 실패 원인을 로그에서 알아보려고 같이 돌려준다
+    return { text, finishReason: data?.candidates?.[0]?.finishReason || data?.promptFeedback?.blockReason || null }
   } catch (e) {
     console.error('Gemini 호출 예외', e?.name)
     return { status: e?.name === 'AbortError' ? 504 : 502 }
@@ -456,21 +463,26 @@ export default async function handler(req, res) {
   const recorded = await recordUsage(supabaseUrl, anonKey, token, kind)
   if (recorded.error) return fail(res, 500, usageProblem('기록', recorded.error))
 
-  const result = await callGemini(apiKey, input)
+  // 응답이 깨졌거나 쓸 수 있는 운동이 없으면 한 번 더 시도한다(사용량은 한 번만 센다). 실패 원인은 서버 로그에 남긴다(응답 내용은 남기지 않음).
+  const produce = async () => {
+    const result = await callGemini(apiKey, input)
+    if (result.text == null) return { result }
+    const clean = input.review ? sanitizeReview(result.text, input) : sanitizeResult(result.text, input)
+    if (!clean) console.error('AI 응답 검증 실패', { mode: input.review ? 'review' : input.current ? 'refine' : 'routine', finishReason: result.finishReason, length: result.text.length })
+    return { result, clean }
+  }
+  let out = await produce()
+  if (out.result.text != null && !out.clean) out = await produce()
+
+  const { result, clean } = out
   if (result.text == null) {
     if (result.status === 429) return fail(res, 503, 'AI 서비스가 지금 바빠요. 잠시 후 다시 시도해 주세요.')
     if (result.status === 504) return fail(res, 504, 'AI 응답이 너무 오래 걸려요. 다시 시도해 주세요.')
     return fail(res, 502, 'AI 호출에 실패했어요. 잠시 후 다시 시도해 주세요.')
   }
-
-  if (input.review) {
-    const review = sanitizeReview(result.text, input)
-    if (!review) return fail(res, 502, 'AI가 검토 결과를 만들지 못했어요. 잠시 후 다시 시도해 주세요.')
-    return res.status(200).json({ ...review, remaining: Math.max(0, limit - used.count - 1) })
+  if (!clean) {
+    const cut = result.finishReason === 'MAX_TOKENS' ? ' (응답이 길어서 잘렸어요)' : ''
+    return fail(res, 502, input.review ? `AI가 검토 결과를 만들지 못했어요${cut}. 잠시 후 다시 시도해 주세요.` : `AI가 올바른 루틴을 만들지 못했어요${cut}. 한 번 더 시도하거나 조건을 바꿔 보세요.`)
   }
-
-  const clean = sanitizeResult(result.text, input)
-  if (!clean) return fail(res, 502, 'AI가 올바른 루틴을 만들지 못했어요. 조건을 바꿔 다시 시도해 주세요.')
-
   return res.status(200).json({ ...clean, remaining: Math.max(0, limit - used.count - 1) })
 }
