@@ -1,10 +1,32 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Sparkles, X } from 'lucide-react'
 import { useAiRoutine } from '../../hooks/useAiRoutine.js'
+import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { EQUIPMENT_OPTIONS } from '../../lib/muscleMap.js'
-import { AI_GOALS, AI_LEVELS, AI_FOCUS, AI_MINUTES, AI_NOTES_MAX } from '../../lib/aiRoutine.js'
+import { buildTagIndex, matchesQuery } from '../../lib/exerciseSearch.js'
+import { AI_GOALS, AI_LEVELS, AI_FOCUS, AI_MINUTES, AI_NOTES_MAX, AI_MAX_INCLUDE } from '../../lib/aiRoutine.js'
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
+const MAX_AVOID = 20
+const PREFS_KEY = 'fit-ai-routine-prefs'
+
+// 개인화 체크박스(내 운동 기록 참고·체형 정보 전송)는 이 기기에서 마지막 선택을 기억한다. 저장소를 못 쓰면 기본값.
+// 기본값: 운동 기록 참고 = 켬(운동 이름·부위 빈도만 보냄), 체형 정보 = 끔(건강 정보라서 직접 켜야 함)
+const loadPrefs = () => {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY))
+    return { useHistory: p?.useHistory !== false, useBody: p?.useBody === true }
+  } catch {
+    return { useHistory: true, useBody: false }
+  }
+}
+const savePrefs = prefs => {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+  } catch {
+    /* 저장소를 못 쓰는 환경이면 기억하지 않는다 */
+  }
+}
 
 function Pills({ options, value, onChange, multi = false, format = v => v }) {
   const isOn = o => (multi ? value.includes(o) : value === o)
@@ -38,21 +60,122 @@ const Field = ({ label, hint, children }) => (
   </div>
 )
 
+// 운동 고르기: 이름·태그로 검색해서 칩으로 쌓는다. blockedIds는 다른 쪽(꼭 넣을/빼고 싶은)에서 이미 고른 운동이라 못 고르게 한다.
+function ExercisePicker({ ids, onChange, catalog, tagsByName, blockedIds, max, placeholder, tone }) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const byId = useMemo(() => new Map(catalog.map(e => [e.id, e])), [catalog])
+  const suggestions = query.trim()
+    ? catalog.filter(e => !ids.includes(e.id) && !blockedIds.includes(e.id) && matchesQuery(e.name, tagsByName.get(e.name), query)).slice(0, 8)
+    : []
+  const chipClass = tone === 'avoid' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-letusBlue'
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {ids.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {ids.map(id => (
+            <span key={id} className={`inline-flex items-center gap-1 pl-3 pr-1.5 min-h-[32px] rounded-full text-ui-body font-bold ${chipClass}`}>
+              {byId.get(id)?.name ?? id}
+              <button type="button" aria-label={`${byId.get(id)?.name ?? id} 제거`} onClick={() => onChange(ids.filter(i => i !== id))} className="p-1">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {ids.length < max ? (
+        <div className="relative">
+          <input
+            value={query}
+            onChange={e => {
+              setQuery(e.target.value)
+              setOpen(true)
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            placeholder={placeholder}
+            className="w-full border border-gray-300 rounded-[4px] px-3.5 py-2 text-ui-body focus:outline-none focus:border-letusBlue bg-white"
+          />
+          {open && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-y-auto max-h-[160px]">
+              {suggestions.map(e => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onMouseDown={ev => ev.preventDefault()}
+                  onClick={() => {
+                    onChange([...ids, e.id])
+                    setQuery('')
+                  }}
+                  className="w-full text-left px-3 py-2 text-ui-body text-gray-700 hover:bg-gray-50 border-b border-gray-50 last:border-0"
+                >
+                  {e.name}
+                  {e.equipment && <span className="ml-1.5 text-ui-caption text-gray-400">{e.equipment}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <span className="text-ui-caption text-gray-400">최대 {max}개까지 고를 수 있어요.</span>
+      )}
+    </div>
+  )
+}
+
+const Toggle = ({ checked, onChange, title, desc }) => (
+  <label className="flex items-start gap-2.5 cursor-pointer">
+    <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="mt-0.5 w-4 h-4 accent-letusBlue shrink-0" />
+    <span className="flex flex-col">
+      <span className="text-ui-body font-bold text-gray-700">{title}</span>
+      <span className="text-ui-caption text-gray-400 leading-relaxed">{desc}</span>
+    </span>
+  </label>
+)
+
 // AI 루틴 만들어주기 — 조건을 고르면 루틴 등록 화면에 채울 초안을 만들어 onDraft로 넘긴다 (웹앱용 화면)
 export default function AiRoutineModal({ onClose, onDraft }) {
   const { loading, error, generate } = useAiRoutine()
+  const { exercises: catalog } = useWorkoutLogs()
+  const tagsByName = useMemo(() => buildTagIndex(catalog), [catalog])
   const [goal, setGoal] = useState(AI_GOALS[0])
   const [level, setLevel] = useState(AI_LEVELS[0])
   const [minutes, setMinutes] = useState(60)
   const [focus, setFocus] = useState(AI_FOCUS[0])
   const [equipment, setEquipment] = useState([])
+  const [include, setInclude] = useState([])
+  const [avoid, setAvoid] = useState([])
   const [repeatDays, setRepeatDays] = useState([])
   const [notes, setNotes] = useState('')
+  const [prefs, setPrefs] = useState(loadPrefs)
+
+  const setPref = (key, value) => {
+    const next = { ...prefs, [key]: value }
+    setPrefs(next)
+    savePrefs(next)
+  }
 
   const handleSubmit = async () => {
-    const draft = await generate({ goal, level, minutes, focus, equipment, notes: notes.trim() }, repeatDays)
+    const draft = await generate({ goal, level, minutes, focus, equipment, notes: notes.trim() }, repeatDays, {
+      include,
+      avoid,
+      useHistory: prefs.useHistory,
+      useBody: prefs.useBody,
+    })
     if (draft) onDraft(draft)
   }
+
+  // 지금 설정에서 Gemini로 실제로 나가는 정보를 그대로 안내한다
+  const sendsText = [
+    '고른 조건',
+    '운동 리스트(이름·부위·장비)',
+    include.length > 0 && '꼭 넣을 운동',
+    prefs.useHistory && '자주 한 운동·적게 한 부위(운동 이름·부위만)',
+    prefs.useBody && '키·몸무게·성별·나이',
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] backdrop-blur-sm p-4 fade-in">
@@ -85,6 +208,20 @@ export default function AiRoutineModal({ onClose, onDraft }) {
           <Field label="사용할 장비" hint="아무것도 안 고르면 전체">
             <Pills options={EQUIPMENT_OPTIONS} value={equipment} onChange={setEquipment} multi />
           </Field>
+          <Field label="꼭 넣고 싶은 운동" hint={`선택 · 최대 ${AI_MAX_INCLUDE}개`}>
+            <ExercisePicker
+              ids={include}
+              onChange={setInclude}
+              catalog={catalog}
+              tagsByName={tagsByName}
+              blockedIds={avoid}
+              max={AI_MAX_INCLUDE}
+              placeholder="운동 이름 검색"
+            />
+          </Field>
+          <Field label="빼고 싶은 운동" hint="선택 · 싫어하거나 못 하는 운동">
+            <ExercisePicker ids={avoid} onChange={setAvoid} catalog={catalog} tagsByName={tagsByName} blockedIds={include} max={MAX_AVOID} placeholder="운동 이름 검색" tone="avoid" />
+          </Field>
           <Field label="반복 요일" hint="선택">
             <Pills options={DAYS} value={repeatDays} onChange={setRepeatDays} multi />
           </Field>
@@ -101,8 +238,24 @@ export default function AiRoutineModal({ onClose, onDraft }) {
             </span>
           </Field>
 
+          <div className="space-y-3 pt-1 border-t border-gray-200">
+            <div className="pt-3 text-ui-body font-bold text-gray-700">내 정보 반영</div>
+            <Toggle
+              checked={prefs.useHistory}
+              onChange={v => setPref('useHistory', v)}
+              title="내 운동 기록 참고"
+              desc="최근 3개월에 자주 한 운동은 선호로, 최근 4주에 안 쓴 부위는 보강 대상으로 봐요. 운동 이름·부위만 보내요."
+            />
+            <Toggle
+              checked={prefs.useBody}
+              onChange={v => setPref('useBody', v)}
+              title="체형 정보 함께 보내기"
+              desc="키·몸무게·성별·나이를 참고해 운동 선택과 강도를 조절해요. 건강 정보라서 직접 켠 때만 보내요."
+            />
+          </div>
+
           <p className="text-ui-caption text-gray-400 leading-relaxed">
-            고른 조건과 운동 리스트(이름·부위·장비)가 Google Gemini로 전송됩니다. 이름·이메일·신체 정보는 보내지 않아요. AI가 만든 초안이니 저장 전에 꼭 확인해 주세요.
+            Google Gemini로 전송되는 정보: {sendsText}. 이름·이메일은 보내지 않아요. AI가 만든 초안이니 저장 전에 꼭 확인해 주세요.
           </p>
         </div>
 
