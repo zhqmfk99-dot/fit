@@ -8,13 +8,12 @@ import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMe
 import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
 import { formatDuration } from '../../lib/workoutTime.js'
-import { evaluateSession, applyNextToPlan, findPrevLog, summarizePerformed } from '../../lib/progression.js'
+import { evaluateSession, applyNextToPlan, findPrevLog, findPrevLogs, summarizePerformed } from '../../lib/progression.js'
 
 // 평가 결과(올리기/유지/낮추기)에 따른 글자색·기호
 const VERDICT_STYLE = {
   'weight-up': { color: 'text-letusBlue', icon: '▲' },
   'reps-up': { color: 'text-letusBlue', icon: '▲' },
-  'sets-up': { color: 'text-letusBlue', icon: '▲' },
   hold: { color: 'text-gray-500', icon: '＝' },
   deload: { color: 'text-orange-600', icon: '▼' },
 }
@@ -336,9 +335,15 @@ export default function WorkoutSession() {
   // 바뀐 목표는 루틴과, 이미 미리 만들어진 같은 운동의 앞으로 예정된 기록(2주치)에 같이 반영한다 — 루틴만 고치면 미리 만든 기록은 옛 목표 그대로라서.
   const planOf = log => routines.find(r => r.id === log.routineId)?.exercises.find(e => e.exercise === log.exercise)
   const metaOf = log => exerciseCatalog.find(e => e.name === log.exercise)
+  // 수퍼세트에 든 운동인가(자기 자신이 "다음과 묶기"이거나 바로 앞 운동이 묶기) — 세트 사이 간격에 짝 운동 시간이 끼므로 휴식 판단에서 뺀다
+  const inSuperset = log => {
+    const day = logs.filter(l => l.routineId === log.routineId && l.date === log.date)
+    const i = day.findIndex(l => l.id === log.id)
+    return !!log.linkedToNext || (i > 0 && !!day[i - 1].linkedToNext)
+  }
   const applyProgression = (log, performedSets, fatigue) => {
     if (!log.routineId) return
-    const result = evaluateSession({ log: { ...log, performedSets, fatigue }, plan: planOf(log), prev: findPrevLog(logs, log), meta: metaOf(log) })
+    const result = evaluateSession({ log: { ...log, performedSets, fatigue }, plan: planOf(log), prevLogs: findPrevLogs(logs, log), meta: metaOf(log), skipRest: inSuperset(log) })
     if (!result) return
     setProgressionNotes(prev => [...prev, { exercise: log.exercise, verdict: result.verdict, label: result.label, reason: result.reason, next: result.next }])
     if (result.verdict === 'hold') return // 목표를 그대로 두는 경우는 바꿀 게 없다
@@ -368,7 +373,7 @@ export default function WorkoutSession() {
   const lastSessionInfo = log => {
     const prev = findPrevLog(logs, log)
     if (!prev) return null
-    return { prev, result: evaluateSession({ log: prev, plan: planOf(log), prev: findPrevLog(logs, prev), meta: metaOf(log) }) }
+    return { prev, result: evaluateSession({ log: prev, plan: planOf(log), prevLogs: findPrevLogs(logs, prev), meta: metaOf(log), skipRest: inSuperset(prev) }) }
   }
 
   const completeSet = () => {
@@ -575,7 +580,7 @@ export default function WorkoutSession() {
                               )}
                             </>
                           ) : (
-                            <div className="text-gray-400">처음 하는 운동이에요. 자세를 지킬 수 있는 무게로 시작해 보세요.</div>
+                            <div className="text-gray-400">처음 하는 운동이에요. 10회를 2~3회 남기고 할 수 있는 가벼운 무게에서 시작해 보세요. 운동 결과를 보고 앱이 다음 무게를 정해요.</div>
                           )}
                         </div>
                       </div>

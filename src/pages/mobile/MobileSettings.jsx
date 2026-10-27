@@ -195,7 +195,7 @@ export default function MobileSettings() {
           <Row title="운동 중 화면 꺼짐 방지" desc="운동 진행 화면이 켜져 있는 동안 화면이 자동으로 꺼지지 않게 해요. 배터리를 더 써요." right={<Switch checked={settings.keepAwake} onChange={v => update({ keepAwake: v })} label="운동 중 화면 꺼짐 방지" />} />
           <Row
             title="점진 과부하 자동 적용"
-            desc="운동을 끝내면 수행 결과를 평가해서 다음 목표(세트·횟수·무게)를 루틴에 자동 반영해요. 끄면 직접 관리하고, 시작 화면의 추천은 보고 직접 적용할 수 있어요."
+            desc="운동을 끝내면 목표 달성 여부와 휴식·속도를 보고 다음에 무게를 올릴지 유지할지 정해서 루틴에 자동 반영해요. 끄면 직접 관리하고, 시작 화면의 추천은 보고 직접 적용할 수 있어요."
             right={<Switch checked={settings.autoProgression} onChange={v => update({ autoProgression: v })} label="점진 과부하 자동 적용" />}
           />
         </Section>

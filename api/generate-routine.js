@@ -164,14 +164,22 @@ async function verifyUser(supabaseUrl, anonKey, token) {
 }
 
 // 최근 24시간 호출 횟수. 테이블이 없거나 조회가 실패하면 null(= 안전하게 거부).
+// Supabase(PostgREST) 실패 응답에서 원인 코드만 뽑는다(비밀 정보 없음). 화면 안내와 서버 로그에 쓴다.
+async function usageError(r) {
+  const body = await r.json().catch(() => null)
+  return { status: r.status, code: body?.code ?? null }
+}
+
+// 최근 24시간 호출 횟수. 실패하면 { error: { status, code } } — 호출하지 않고 원인을 알려 준다.
+// 행 범위는 Range 헤더가 아니라 limit=1로 줄인다(빈 테이블에서 Range가 416을 내는 경우를 피함). 총 개수는 count=exact의 Content-Range에서 읽는다.
 async function countRecentUsage(supabaseUrl, anonKey, token) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const r = await fetch(`${supabaseUrl}/rest/v1/ai_usage?select=id&kind=eq.routine&created_at=gte.${encodeURIComponent(since)}`, {
-    headers: { apikey: anonKey, Authorization: `Bearer ${token}`, Prefer: 'count=exact', 'Range-Unit': 'items', Range: '0-0' },
+  const r = await fetch(`${supabaseUrl}/rest/v1/ai_usage?select=id&kind=eq.routine&created_at=gte.${encodeURIComponent(since)}&limit=1`, {
+    headers: { apikey: anonKey, Authorization: `Bearer ${token}`, Prefer: 'count=exact' },
   })
-  if (!r.ok) return null
+  if (!r.ok) return { error: await usageError(r) }
   const total = Number((r.headers.get('content-range') || '').split('/')[1])
-  return Number.isFinite(total) ? total : null
+  return Number.isFinite(total) ? { count: total } : { error: { status: r.status, code: 'NO_COUNT' } }
 }
 
 async function recordUsage(supabaseUrl, anonKey, token) {
@@ -180,7 +188,19 @@ async function recordUsage(supabaseUrl, anonKey, token) {
     headers: { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
     body: JSON.stringify({ kind: 'routine' }),
   })
-  return r.ok
+  return r.ok ? { ok: true } : { error: await usageError(r) }
+}
+
+// 사용량 테이블 접근 실패를 사람이 고칠 수 있는 안내로 바꾼다
+function usageProblem(what, e) {
+  const hint =
+    e.code === '42501' || e.status === 401 || e.status === 403
+      ? '권한이 없어요. Supabase SQL Editor에서 supabase/ai_usage.sql을 다시 실행하세요(권한 부여 포함).'
+      : e.code === 'PGRST205' || e.code === '42P01' || e.status === 404
+        ? 'ai_usage 테이블이 없어요. Supabase SQL Editor에서 supabase/ai_usage.sql을 실행하세요.'
+        : 'supabase/ai_usage.sql을 다시 실행해 보세요.'
+  console.error(`ai_usage ${what} 실패`, e)
+  return `AI 사용량을 ${what}하지 못했어요. ${hint} (원인 코드: HTTP ${e.status}${e.code ? ` / ${e.code}` : ''})`
 }
 
 async function callGemini(apiKey, input) {
@@ -273,10 +293,11 @@ export default async function handler(req, res) {
   if (!input) return fail(res, 400, '입력값이 올바르지 않아요.')
 
   const used = await countRecentUsage(supabaseUrl, anonKey, token)
-  if (used == null) return fail(res, 500, 'AI 사용량을 확인하지 못했어요. 관리자에게 문의해 주세요. (supabase/ai_usage.sql 실행 여부)')
-  if (used >= DAILY_LIMIT) return fail(res, 429, `하루 AI 사용 한도(${DAILY_LIMIT}회)를 모두 썼어요. 내일 다시 이용해 주세요.`)
+  if (used.error) return fail(res, 500, usageProblem('확인', used.error))
+  if (used.count >= DAILY_LIMIT) return fail(res, 429, `하루 AI 사용 한도(${DAILY_LIMIT}회)를 모두 썼어요. 내일 다시 이용해 주세요.`)
   // 호출 전에 먼저 기록해서, 중간에 실패해도 반복 호출로 비용이 새지 않게 한다
-  if (!(await recordUsage(supabaseUrl, anonKey, token))) return fail(res, 500, 'AI 사용량을 기록하지 못했어요.')
+  const recorded = await recordUsage(supabaseUrl, anonKey, token)
+  if (recorded.error) return fail(res, 500, usageProblem('기록', recorded.error))
 
   const result = await callGemini(apiKey, input)
   if (result.text == null) {
@@ -288,5 +309,5 @@ export default async function handler(req, res) {
   const clean = sanitizeResult(result.text, input)
   if (!clean) return fail(res, 502, 'AI가 올바른 루틴을 만들지 못했어요. 조건을 바꿔 다시 시도해 주세요.')
 
-  return res.status(200).json({ ...clean, remaining: Math.max(0, DAILY_LIMIT - used - 1) })
+  return res.status(200).json({ ...clean, remaining: Math.max(0, DAILY_LIMIT - used.count - 1) })
 }

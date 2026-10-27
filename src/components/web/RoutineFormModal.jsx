@@ -6,7 +6,7 @@ import { buildTagIndex, matchesQuery, aliasMatch } from '../../lib/exerciseSearc
 
 const ACCENT = 'bg-letusOrange'
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
-const emptyExercise = () => ({ exercise: '', sets: '', reps: '', repsMax: '', weight: '', restSeconds: '', linkedToNext: false })
+const emptyExercise = () => ({ exercise: '', sets: '', reps: '', weight: '', restSeconds: '', linkedToNext: false })
 
 const renderHighlight = (text, query) => {
   if (!query) return text
@@ -50,9 +50,16 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
 
   const addExercise = () => setExercises(prev => [...prev, emptyExercise()])
   const removeExercise = idx => setExercises(prev => prev.filter((_, i) => i !== idx))
-  // 반복 범위(최소·최대)를 직접 바꾸면, 앱이 자동으로 올려 둔 지금 목표 횟수(progressReps)는 버리고 새 범위의 하한부터 다시 시작한다
+  // 반복을 직접 바꾸면 앱이 맨몸 운동에 올려 둔 지금 목표 횟수(progressReps)는 버리고 입력한 값부터 다시 시작한다
   const updateExercise = (idx, field, value) =>
-    setExercises(prev => prev.map((e, i) => (i === idx ? { ...e, [field]: value, ...(field === 'reps' || field === 'repsMax' ? { progressReps: undefined } : {}) } : e)))
+    setExercises(prev => prev.map((e, i) => (i === idx ? { ...e, [field]: value, ...(field === 'reps' ? { progressReps: undefined } : {}) } : e)))
+
+  // 무게가 필요한 운동(맨몸이 아닌 장비)인데 무게가 비어 있으면 true — 비우면 0kg로 저장돼 "맨몸 운동"으로 기록되기 때문이다
+  const needsWeight = ex => {
+    const name = ex.exercise.trim()
+    const equipment = name ? exerciseCatalog.find(c => c.name === name)?.equipment : null
+    return !!equipment && equipment !== '맨몸' && !(Number(ex.weight) > 0)
+  }
 
   // 마우스·터치 둘 다에서 되게 HTML5 draggable 대신 포인터 이벤트로 직접 순서를 바꾼다
   // (모바일 브라우저는 네이티브 drag-and-drop을 지원하지 않는 경우가 많다)
@@ -90,10 +97,15 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
         reps: Number(e.reps) || 0,
         weight: Number(e.weight) || 0,
         restSeconds: Number(e.restSeconds) || 90,
-        ...(Number(e.repsMax) > 0 ? { repsMax: Number(e.repsMax) } : {}),
         ...(Number(e.progressReps) > 0 ? { progressReps: Number(e.progressReps) } : {}),
         linkedToNext: !!e.linkedToNext,
       }))
+    // 무게가 필요한 운동인데 비어 있으면 맨몸 운동으로 기록된다 — 저장 전에 한 번 확인한다
+    const missingWeight = exercises.filter(e => e.exercise.trim() && needsWeight(e)).length
+    if (missingWeight > 0 && !confirm(`무게가 비어 있는 운동이 ${missingWeight}개 있어요.
+그대로 저장하면 맨몸 운동으로 기록되고, 앱이 무게를 올려 주지 못해요.
+그래도 저장할까요?`)) return
+
     // 목록 맨 끝 운동은 "다음 운동"이 없으니 묶기 표시가 남아있어도 무시한다
     if (cleanedExercises.length > 0) cleanedExercises[cleanedExercises.length - 1].linkedToNext = false
 
@@ -127,6 +139,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
             <div className="bg-blue-50 text-letusBlue text-ui-caption font-bold p-3 rounded border border-blue-100 leading-relaxed">
               ✨ AI가 만든 초안이에요. 운동·무게를 확인하고 고친 뒤 저장해 주세요.
               {draftNote && <div className="mt-1 font-normal text-gray-600">{draftNote}</div>}
+              <div className="mt-1 font-normal text-gray-600">무게는 AI가 정하지 않아요. 비어 있는 운동은 직접 입력해 주세요. 처음 하는 운동은 10회를 2~3회 남기고 할 수 있는 가벼운 무게에서 시작하세요.</div>
             </div>
           )}
           {errorMsg && (
@@ -250,7 +263,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
                         </svg>
                       </button>
                     </div>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-4 gap-1.5">
                       <input
                         type="number"
                         value={ex.sets}
@@ -262,16 +275,8 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
                         type="number"
                         value={ex.reps}
                         onChange={e => updateExercise(idx, 'reps', e.target.value)}
-                        placeholder="최소 반복"
-                        title="반복 범위의 하한 (예: 8~12회면 8)"
-                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-ui-body focus:outline-none focus:border-letusOrange"
-                      />
-                      <input
-                        type="number"
-                        value={ex.repsMax ?? ''}
-                        onChange={e => updateExercise(idx, 'repsMax', e.target.value)}
-                        placeholder="최대 반복"
-                        title="반복 범위의 상한 (예: 8~12회면 12). 비우면 최소+4회(최소 6 미만이면 +2회). 모든 세트가 상한을 채우면 무게를 올려요"
+                        placeholder="반복"
+                        title="목표 반복 횟수. 모든 세트에서 채우고 수행이 안정적이면 앱이 다음에 무게를 올려요"
                         className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-ui-body focus:outline-none focus:border-letusOrange"
                       />
                       <input
@@ -279,7 +284,7 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
                         value={ex.weight}
                         onChange={e => updateExercise(idx, 'weight', e.target.value)}
                         placeholder="kg"
-                        className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-ui-body focus:outline-none focus:border-letusOrange"
+                        className={`min-w-0 border rounded px-2 py-1.5 text-ui-body focus:outline-none focus:border-letusOrange ${needsWeight(ex) ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                       />
                       <input
                         type="number"
@@ -290,6 +295,11 @@ export default function RoutineFormModal({ row, draft, draftNote, onClose, onSav
                         className="min-w-0 border border-gray-200 rounded px-2 py-1.5 text-ui-body focus:outline-none focus:border-letusOrange"
                       />
                     </div>
+                    {needsWeight(ex) && (
+                      <p className="text-ui-caption font-bold text-red-500 leading-relaxed">
+                        무게를 입력해 주세요. 비워 두면 맨몸 운동으로 기록돼요. 처음 하는 운동이면 10회를 2~3회 남기고 할 수 있는 가벼운 무게에서 시작해 보세요.
+                      </p>
+                    )}
                     {idx < exercises.length - 1 && (
                       <label className="flex items-center gap-1.5 text-ui-caption font-bold text-gray-500 cursor-pointer">
                         <input

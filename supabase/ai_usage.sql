@@ -11,6 +11,10 @@ create table if not exists public.ai_usage (
 
 create index if not exists ai_usage_user_created_idx on public.ai_usage (user_id, created_at desc);
 
+-- 로그인한 사용자가 API로 자기 행을 읽고 추가할 수 있게 권한을 명시한다(수정·삭제는 일부러 주지 않음).
+-- 새 테이블이 API에 자동으로 열리지 않는 프로젝트에서는 이 줄이 없으면 "permission denied"가 난다. 여러 번 실행해도 안전하다.
+grant select, insert on public.ai_usage to authenticated;
+
 alter table public.ai_usage enable row level security;
 
 drop policy if exists "ai_usage_select_own" on public.ai_usage;
