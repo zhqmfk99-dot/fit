@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, Pencil, Check, SlidersHorizontal, X, Search } from 'lucide-react'
 import PageHeader from '../../components/PageHeader.jsx'
+import { useBackHandler } from '../../context/BackNavigationContext.jsx'
 import ExerciseFormModal from '../../components/ExerciseFormModal.jsx'
 import ExerciseDetailModal from '../../components/ExerciseDetailModal.jsx'
 import { useExerciseManager } from '../../hooks/useExerciseManager.js'
@@ -54,6 +55,7 @@ export default function MobileExercises() {
   // 검색(운동명 + 태그) — 항상 보이게 위에 둔다. 필터는 뱃지를 다 펼치면 화면을 너무 차지해서 바텀시트 안에 넣는다.
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilterSheet, setShowFilterSheet] = useState(false)
+  useBackHandler(() => setShowFilterSheet(false), showFilterSheet) // 필터 시트가 열려 있으면 뒤로가기로 먼저 닫는다
   const [muscleFilter, setMuscleFilter] = useState([])
   const [equipmentFilter, setEquipmentFilter] = useState([])
   const [patternFilter, setPatternFilter] = useState([])

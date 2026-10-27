@@ -1,9 +1,11 @@
+import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useState } from 'react'
 import DateInput from './DateInput.jsx'
 
 const ACCENT = 'bg-letusOrange'
 
 export default function RescheduleModal({ routineName, currentDate, onClose, onConfirm }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const [newDate, setNewDate] = useState(currentDate)
   const [errorMsg, setErrorMsg] = useState('')
 

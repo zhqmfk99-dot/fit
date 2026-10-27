@@ -1,3 +1,4 @@
+import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useState, useMemo } from 'react'
 import DateInput from './DateInput.jsx'
 import { setCount, avgReps, avgWeight } from '../lib/workoutMetrics.js'
@@ -21,6 +22,7 @@ const renderHighlight = (text, query) => {
 }
 
 export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const isEdit = !!row
   const { routines, exercises: exerciseCatalog } = useWorkoutLogs()
   const knownExercises = useMemo(() => getKnownExerciseNames(routines, exerciseCatalog), [routines, exerciseCatalog])

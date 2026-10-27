@@ -1,3 +1,4 @@
+import { useBackHandler } from '../../context/BackNavigationContext.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import DateInput from '../DateInput.jsx'
@@ -36,6 +37,7 @@ const toForm = record => Object.fromEntries(INPUT_KEYS.map(k => [k, record?.[k] 
 // PWA(모바일) 전용 신체 기록 입력 — 아래에서 올라오는 시트. (웹앱은 components/BodyRecordModal.jsx)
 // 날짜당 한 건: 같은 날짜로 다시 저장하면 그 날짜 기록을 덮어쓴다.
 export default function BodyRecordModal({ initialDate, onClose }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const { user } = useAuth()
   const { bodyRecords, setBodyRecords } = useWorkoutLogs()
   const startDate = initialDate || getToday()

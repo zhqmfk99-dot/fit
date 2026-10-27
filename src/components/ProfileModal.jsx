@@ -1,3 +1,4 @@
+import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
@@ -24,6 +25,7 @@ function calcBmi(heightCm, weightKg) {
 }
 
 export default function ProfileModal({ onClose }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)

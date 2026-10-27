@@ -1,8 +1,10 @@
+import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { repsText } from '../lib/progression.js'
 
 const ALL_DAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 export default function RoutineDetailModal({ row, onClose, onEdit, onDelete }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   if (!row) return null
 
   return (

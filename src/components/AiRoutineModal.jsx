@@ -1,3 +1,4 @@
+import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useState, useMemo } from 'react'
 import { Sparkles, X } from 'lucide-react'
 import { useAiRoutine } from '../hooks/useAiRoutine.js'
@@ -120,6 +121,7 @@ const Toggle = ({ checked, onChange, title, desc }) => (
 
 // AI 루틴 만들어주기 — 조건을 고르면 루틴 등록 화면에 채울 초안을 만들어 onDraft로 넘긴다 (PWA용 화면)
 export default function AiRoutineModal({ onClose, onDraft }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const { loading, error, generate } = useAiRoutine()
   const { exercises: catalog } = useWorkoutLogs()
   const tagsByName = useMemo(() => buildTagIndex(catalog), [catalog])

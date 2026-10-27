@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X, Check, Link2 } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
+import { useBackHandler } from '../../context/BackNavigationContext.jsx'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
 import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
@@ -135,6 +136,13 @@ export default function WorkoutSession() {
   const date = searchParams.get('date')
   const { logs, setLogs, routines, setRoutines, exercises: exerciseCatalog } = useWorkoutLogs()
   const { settings } = useSettings() // 기본 휴식 시간·화면 꺼짐 방지·점진 과부하 자동 적용
+  // 뒤로가기(제스처)는 종료 버튼(X)과 같게 동작한다: 세트·휴식 중이면 확인창, 그 외에는 바로 기록으로.
+  // handleExit은 아래(조기 return 뒤)에서 정의되므로 ref로 연결한다. 세션을 못 찾은 화면에서는 false(처리 안 함) → 상위 화면으로 이동.
+  const exitRef = useRef(null)
+  useBackHandler(() => {
+    if (!exitRef.current) return false
+    exitRef.current()
+  })
   const dayKcal = useDayKcal(date)
   const daySeconds = useDayDuration(date)
 
@@ -427,6 +435,7 @@ export default function WorkoutSession() {
     if ((subPhase === 'active' || subPhase === 'rest') && !confirm('운동을 종료할까요?\n진행 중인 운동의 세트 기록은 저장되지 않습니다.\n(이미 끝낸 운동은 저장되어 있습니다.)')) return
     navigate(LOG_PATH)
   }
+  exitRef.current = handleExit
 
   const mm = String(Math.floor(restRemaining / 60)).padStart(2, '0')
   const ss = String(restRemaining % 60).padStart(2, '0')

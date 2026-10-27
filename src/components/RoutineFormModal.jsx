@@ -1,3 +1,4 @@
+import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useState, useMemo } from 'react'
 import { GripVertical } from 'lucide-react'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
@@ -24,6 +25,7 @@ const renderHighlight = (text, query) => {
 
 // row: 수정할 기존 루틴 / draft: 새 루틴의 초기값(AI가 만든 초안 — 수정이 아니라 새로 등록) / draftNote: 초안 안내 문구
 export default function RoutineFormModal({ row, draft, draftNote, onClose, onSave }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const isEdit = !!row
   const init = row ?? draft
   const { routines, exercises: exerciseCatalog } = useWorkoutLogs()

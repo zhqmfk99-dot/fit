@@ -1,3 +1,4 @@
+import { useBackHandler } from '../../context/BackNavigationContext.jsx'
 import { useState, useMemo } from 'react'
 import { Plus, GripVertical } from 'lucide-react'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
@@ -22,6 +23,7 @@ const renderHighlight = (text, query) => {
 }
 
 export default function QuickWorkoutModal({ routines = [], onClose, onStartRoutine, onStartCustom }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const [tab, setTab] = useState(routines.length > 0 ? 'routine' : 'custom')
   const [exercises, setExercises] = useState([emptyExercise()])
   const [errorMsg, setErrorMsg] = useState('')

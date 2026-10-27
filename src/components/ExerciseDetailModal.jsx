@@ -1,7 +1,9 @@
+import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { MUSCLE_LABELS } from '../lib/muscleMap.js'
 import { equipmentBadgeClass } from '../lib/equipmentStyle.js'
 
 export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   if (!row) return null
 
   return (

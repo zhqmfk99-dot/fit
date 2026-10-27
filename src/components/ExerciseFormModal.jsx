@@ -1,9 +1,11 @@
+import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useState } from 'react'
 import { TRAINABLE_MUSCLES, MUSCLE_LABELS, EQUIPMENT_OPTIONS, MOVEMENT_PATTERNS, EXERCISE_TYPES } from '../lib/muscleMap.js'
 
 const ACCENT = 'bg-letusOrange'
 
 export default function ExerciseFormModal({ row, existingNames = [], onClose, onSave }) {
+  useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const isEdit = !!row
 
   const [name, setName] = useState(row?.name || '')

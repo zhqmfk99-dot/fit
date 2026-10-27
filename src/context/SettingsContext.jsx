@@ -6,6 +6,7 @@ import { useAuth } from './AuthContext.jsx'
 // SQL을 아직 실행하지 않았으면(칼럼이 없으면) 이 기기(localStorage)에만 저장한다. 기기 저장본은 항상 캐시로도 쓴다.
 export const SETTING_LIMITS = { restMin: 30, restMax: 300, restStep: 15 }
 const SAVE_DELAY_MS = 600
+export const LAST_THEME_KEY = 'fit-last-theme'
 export const DEFAULT_SETTINGS = {
   theme: 'system', // 'system' | 'light' | 'dark'
   defaultRestSeconds: 90, // 루틴에 휴식을 안 적었을 때 쓰는 세트 간 휴식
@@ -132,6 +133,15 @@ export function SettingsProvider({ children }) {
     [userId, flush],
   )
 
+  // 로그인 화면은 설정을 아직 못 불러오니, 마지막으로 쓴 테마를 따로 기억해 둔다(로그아웃 후·로그인 전에 같은 테마로 보이게)
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAST_THEME_KEY, settings.theme)
+    } catch {
+      /* 저장소를 못 쓰는 환경이면 기억하지 않는다 */
+    }
+  }, [settings.theme])
+
   const value = useMemo(() => ({ settings, update, accountSync, saveError }), [settings, update, accountSync, saveError])
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }
@@ -142,9 +152,8 @@ export function useSettings() {
   return ctx
 }
 
-// 지금 다크 모드로 보여야 하는지: 설정이 "시스템"이면 기기의 다크 모드 설정을 따라간다(바뀌면 바로 반영)
-export function useIsDark() {
-  const { settings } = useSettings()
+// 기기의 다크 모드 설정(prefers-color-scheme). 바뀌면 바로 반영한다.
+export function useSystemDark() {
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)
   useEffect(() => {
     const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
@@ -161,5 +170,12 @@ export function useIsDark() {
       window.removeEventListener('focus', recheck)
     }
   }, [])
+  return systemDark
+}
+
+// 지금 다크 모드로 보여야 하는지: 설정이 "시스템"이면 기기의 다크 모드 설정을 따라간다
+export function useIsDark() {
+  const { settings } = useSettings()
+  const systemDark = useSystemDark()
   return settings.theme === 'dark' || (settings.theme === 'system' && systemDark)
 }

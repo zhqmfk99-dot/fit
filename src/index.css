@@ -37,6 +37,10 @@
 html.dark {
   background-color: rgb(var(--s-letusBg));
 }
+/* 배경 클래스가 없는 입력칸(로그인 등)이 브라우저 기본 회색으로 뜨지 않게 앱 팔레트로 맞춘다. :where()라 우선순위가 0이어서 bg-white 같은 클래스가 있는 입력칸은 그대로다. */
+:where(html.dark) :where(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea) {
+  background-color: rgb(var(--s-gray-50));
+}
 html.dark .recharts-cartesian-grid line {
   stroke: #334155;
 }
