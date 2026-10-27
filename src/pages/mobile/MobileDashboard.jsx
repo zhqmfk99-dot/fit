@@ -7,6 +7,7 @@ import MuscleFatigueMap from '../../components/mobile/MuscleFatigueMap.jsx'
 import BodyTrendChart from '../../components/mobile/BodyTrendChart.jsx'
 import CalorieTrendChart from '../../components/mobile/CalorieTrendChart.jsx'
 import WeeklyReportCard from '../../components/mobile/WeeklyReportCard.jsx'
+import GoalProgressCard from '../../components/mobile/GoalProgressCard.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { totalVolume } from '../../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../../lib/muscleMap.js'
@@ -48,6 +49,7 @@ export default function MobileDashboard() {
         </div>
 
         <WeeklyReportCard />
+        <GoalProgressCard />
 
         <BodyTrendChart records={bodyRecords} />
 

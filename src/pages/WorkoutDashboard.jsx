@@ -7,6 +7,7 @@ import MuscleFatigueMap from '../components/web/MuscleFatigueMap.jsx'
 import BodyTrendChart from '../components/BodyTrendChart.jsx'
 import CalorieTrendChart from '../components/web/CalorieTrendChart.jsx'
 import WeeklyReportCard from '../components/web/WeeklyReportCard.jsx'
+import GoalProgressCard from '../components/web/GoalProgressCard.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { totalVolume } from '../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../lib/muscleMap.js'
@@ -47,6 +48,7 @@ export default function WorkoutDashboard() {
         </div>
 
         <WeeklyReportCard />
+        <GoalProgressCard />
 
         <BodyTrendChart records={bodyRecords} />
 

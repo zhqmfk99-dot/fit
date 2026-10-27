@@ -7,6 +7,9 @@ import { MUSCLE_LABELS, UPPER_BODY_MUSCLES, LOWER_BODY_MUSCLES } from './muscleM
 import { calcBmi } from './bodyMetrics.js'
 
 export const AI_GOALS = ['근비대', '근력', '체지방 감량', '체력 유지']
+export const AI_MAX_GOALS = 3 // 목표는 여러 개 고를 수 있다(서버 MAX_GOALS와 같아야 한다). 여러 개면 AI가 운동마다 나눠 섞는다.
+// 조건 객체에서 목표 배열을 꺼낸다(예전 형식인 단일 `goal`도 받는다)
+export const goalsOf = conditions => (Array.isArray(conditions?.goals) ? conditions.goals : conditions?.goal ? [conditions.goal] : [])
 export const AI_LEVELS = ['초보', '중급', '상급']
 // 큰 분류. 상체는 밀기·당기기를 포함하므로 겹쳐 고르면 중복이 된다(여러 개 선택은 허용). 더 구체적으로 정하려면 "세부 부위"를 쓴다.
 export const AI_FOCUS = ['전신', '상체', '하체', '밀기(가슴·어깨·삼두)', '당기기(등·이두)', '어깨', '팔(이두·삼두)', '코어']
@@ -111,7 +114,8 @@ export function buildHistorySummary(logs, exercises, now = new Date()) {
 
 // 체형 정보(사용자가 체크했을 때만 조회·전송): 키·몸무게는 가장 최근 신체 기록 → 없으면 "내 정보", 성별·나이는 "내 정보".
 // 값이 하나도 없으면 null.
-export async function fetchBodyInfo(userId, bodyRecords) {
+// goalHint: 내 목표에서 계산한 { direction, level }(lib/bodyGoal.js) — 목표 숫자는 보내지 않고 이 방향·크기만 체형 정보와 함께 보낸다
+export async function fetchBodyInfo(userId, bodyRecords, goalHint = null) {
   const { data: profile } = await supabase.from('profiles').select('gender, age, height_cm, weight_kg').eq('id', userId).maybeSingle()
   const latest = field =>
     [...bodyRecords]
@@ -125,6 +129,8 @@ export async function fetchBodyInfo(userId, bodyRecords) {
     heightCm: heightCm ?? null,
     weightKg: weightKg ?? null,
     bmi: calcBmi(heightCm, weightKg),
+    bodyFatPct: latest('bodyFatPct') ?? null, // 가장 최근 신체 기록의 체지방률(목표를 섞는 비중을 정할 때 쓴다)
+    goalHint: goalHint || null,
   }
   return Object.values(info).some(v => v != null) ? info : null
 }
@@ -144,7 +150,7 @@ export async function requestRoutineDraft(conditions, exercises, extra = {}) {
   }
 
   return postToAi(token, {
-    goal: conditions.goal,
+    goals: goalsOf(conditions),
     level: conditions.level,
     minutes: conditions.minutes,
     focus: conditions.focus,
@@ -181,7 +187,7 @@ async function postToAi(token, payload, failMessage) {
 
 export const REVIEW_MAX_EXERCISES = 12 // 서버(MAX_CURRENT)와 같아야 한다
 
-// conditions: { goal, level, focus, equipment }(모두 선택) / current: currentForRefine()의 결과
+// conditions: { goals, level, focus, equipment }(모두 선택) / current: currentForRefine()의 결과
 // 대체 운동 후보는 운동 리스트에서 쓸 수 있는 장비로 거른 목록이다(현재 루틴의 운동은 장비와 상관없이 포함). 현재 루틴 운동을 앞에 둔다.
 export async function requestRoutineReview(conditions, exercises, current) {
   const { data } = await supabase.auth.getSession()
@@ -191,7 +197,7 @@ export async function requestRoutineReview(conditions, exercises, current) {
   const catalog = buildCatalogPayload(exercises, conditions.equipment || [], [], ids, [])
   catalog.sort((a, b) => Number(ids.includes(b.id)) - Number(ids.includes(a.id)))
   if (catalog.length < 3) throw new Error('비교할 운동이 부족해요. 운동 리스트에 운동을 더 등록하거나 장비 선택을 넓혀 주세요.')
-  return postToAi(token, { review: true, goal: conditions.goal || undefined, level: conditions.level || undefined, focus: conditions.focus || [], exercises: catalog, current }, 'AI 루틴 검토에 실패했어요.')
+  return postToAi(token, { review: true, goals: goalsOf(conditions), level: conditions.level || undefined, focus: conditions.focus || [], exercises: catalog, current }, 'AI 루틴 검토에 실패했어요.')
 }
 
 // 서버 결과 → 루틴 등록 화면에 채울 초안. (id가 운동 리스트에 없으면 버린다)

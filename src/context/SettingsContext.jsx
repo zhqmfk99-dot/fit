@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from './AuthContext.jsx'
 import { EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
+import { GOAL_LIMITS } from '../lib/bodyGoal.js'
 
 // 앱 설정 — 계정(profiles.settings)에 저장해서 기기를 바꿔도 같게 한다. (supabase/user_settings.sql)
 // SQL을 아직 실행하지 않았으면(칼럼이 없으면) 이 기기(localStorage)에만 저장한다. 기기 저장본은 항상 캐시로도 쓴다.
@@ -18,7 +19,17 @@ export const DEFAULT_SETTINGS = {
   aiUseHistory: true, // AI 루틴 만들기: 내 운동 기록 참고
   aiUseBody: false, // AI 루틴 만들기: 체형 정보 전송 (건강 정보라 기본 끔)
   calorieCalibration: 1.0, // 소모 칼로리 보정 계수(시계 값과 비교해 직접 맞춘다). 새로 저장되는 기록부터 적용된다.
+  goalWeightKg: null, // 내 목표: 목표 체중(kg). 비우면 null
+  goalBodyFatPct: null, // 내 목표: 목표 체지방률(%)
+  goalDate: '', // 내 목표: 목표일(YYYY-MM-DD, 선택)
   myEquipment: [], // 내 운동기구(쓸 수 있는 기구) — AI 루틴 만들기의 "사용할 장비"에 자동 선택된다. 비면 전체. 맨몸은 기구가 필요 없어 항상 포함이라 저장하지 않는다.
+}
+
+// 목표 숫자: 비었거나 숫자가 아니면 null, 범위를 벗어나면 가장 가까운 끝값으로, 소수 첫째 자리까지
+function goalNumber(v, min, max) {
+  if (v === '' || v == null) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.round(Math.min(max, Math.max(min, n)) * 10) / 10 : null
 }
 
 // 저장된 값을 믿지 않고 항목마다 형식·범위를 맞춘다 (모르는 키는 버린다)
@@ -36,6 +47,9 @@ export function sanitizeSettings(raw) {
     aiUseHistory: bool(r.aiUseHistory, DEFAULT_SETTINGS.aiUseHistory),
     aiUseBody: bool(r.aiUseBody, DEFAULT_SETTINGS.aiUseBody),
     calorieCalibration: Number.isFinite(Number(r.calorieCalibration)) ? Math.min(SETTING_LIMITS.calMax, Math.max(SETTING_LIMITS.calMin, Math.round(Number(r.calorieCalibration) * 20) / 20)) : DEFAULT_SETTINGS.calorieCalibration,
+    goalWeightKg: goalNumber(r.goalWeightKg, GOAL_LIMITS.weightMin, GOAL_LIMITS.weightMax),
+    goalBodyFatPct: goalNumber(r.goalBodyFatPct, GOAL_LIMITS.fatMin, GOAL_LIMITS.fatMax),
+    goalDate: /^\d{4}-\d{2}-\d{2}$/.test(r.goalDate) && !Number.isNaN(Date.parse(r.goalDate)) ? r.goalDate : '',
     myEquipment: Array.isArray(r.myEquipment) ? [...new Set(r.myEquipment.filter(e => EQUIPMENT_OPTIONS.includes(e) && e !== '맨몸'))] : [],
   }
 }

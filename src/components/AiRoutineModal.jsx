@@ -2,12 +2,13 @@ import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { useState, useMemo } from 'react'
 import { Sparkles, X } from 'lucide-react'
 import { useAiRoutine } from '../hooks/useAiRoutine.js'
+import { useBodyGoal } from '../hooks/useBodyGoal.js'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
 import { buildTagIndex, matchesQuery } from '../lib/exerciseSearch.js'
 import {
-  AI_GOALS, AI_LEVELS, AI_FOCUS, AI_MINUTES, AI_NOTES_MAX, AI_MAX_INCLUDE, AI_MIN_CANDIDATES, AI_MUSCLE_GROUPS, muscleLabel, buildCatalogPayload,
+  AI_GOALS, AI_MAX_GOALS, AI_LEVELS, AI_FOCUS, AI_MINUTES, AI_NOTES_MAX, AI_MAX_INCLUDE, AI_MIN_CANDIDATES, AI_MUSCLE_GROUPS, muscleLabel, buildCatalogPayload,
 } from '../lib/aiRoutine.js'
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
@@ -124,8 +125,9 @@ export default function AiRoutineModal({ onClose, onDraft }) {
   useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const { loading, error, generate } = useAiRoutine()
   const { exercises: catalog } = useWorkoutLogs()
+  const bodyGoal = useBodyGoal() // 내 목표(설정)와 신체 기록으로 계산한 방향·크기 — 목표 칩을 미리 고르고, 체형 정보 전송을 켰을 때 AI에 힌트로 보낸다
   const tagsByName = useMemo(() => buildTagIndex(catalog), [catalog])
-  const [goal, setGoal] = useState(AI_GOALS[0])
+  const [goals, setGoals] = useState(() => bodyGoal.suggestedGoals || [AI_GOALS[0]]) // 목표: 여러 개(최대 3개). 내 목표가 있으면 거기에 맞춰 미리 고른다
   const [level, setLevel] = useState(AI_LEVELS[0])
   const [minutes, setMinutes] = useState(60)
   const [focus, setFocus] = useState(['전신'])
@@ -143,6 +145,12 @@ export default function AiRoutineModal({ onClose, onDraft }) {
   const prefs = { useHistory: settings.aiUseHistory, useBody: settings.aiUseBody }
   const setPref = (key, value) => update(key === 'useHistory' ? { aiUseHistory: value } : { aiUseBody: value })
 
+  // 목표: 최소 1개, 최대 AI_MAX_GOALS개. 마지막 하나는 해제되지 않고, 최대 개수에서는 더 고를 수 없다.
+  const handleGoals = next => {
+    if (next.length === 0 || next.length > AI_MAX_GOALS) return
+    setGoals(next)
+  }
+
   // 집중 부위: 여러 개 고를 수 있다. "전신"은 다른 부위와 같이 고르지 않고(고르면 나머지 해제), 전부 해제하면 전신으로 돌아간다.
   const handleFocus = next => {
     const added = next.find(f => !focus.includes(f))
@@ -155,11 +163,12 @@ export default function AiRoutineModal({ onClose, onDraft }) {
   const candidateCount = useMemo(() => buildCatalogPayload(catalog, equipment, avoid, include, muscles).length, [catalog, equipment, avoid, include, muscles])
 
   const handleSubmit = async () => {
-    const draft = await generate({ goal, level, minutes, focus, muscles, equipment, notes: notes.trim() }, repeatDays, {
+    const draft = await generate({ goals, level, minutes, focus, muscles, equipment, notes: notes.trim() }, repeatDays, {
       include,
       avoid,
       useHistory: prefs.useHistory,
       useBody: prefs.useBody,
+      goalHint: bodyGoal.hint,
     })
     if (draft) onDraft(draft)
   }
@@ -170,7 +179,8 @@ export default function AiRoutineModal({ onClose, onDraft }) {
     '운동 리스트(이름·부위·장비)',
     include.length > 0 && '꼭 넣을 운동',
     prefs.useHistory && '자주 한 운동·적게 한 부위(운동 이름·부위만)',
-    prefs.useBody && '키·몸무게·성별·나이',
+    prefs.useBody && '키·몸무게·성별·나이·체지방률(신체 기록에 있으면)',
+    prefs.useBody && bodyGoal.hint && '내 목표에서 계산한 방향(감량·증량 등, 목표 숫자는 안 보냄)',
   ]
     .filter(Boolean)
     .join(', ')
@@ -191,8 +201,12 @@ export default function AiRoutineModal({ onClose, onDraft }) {
         <div className="p-5 bg-slate-50 overflow-y-auto max-h-[70vh] space-y-4">
           {error && <div className="bg-red-50 text-red-600 text-m-body font-bold p-3 rounded border border-red-100">{error}</div>}
 
-          <Field label="목표">
-            <Pills options={AI_GOALS} value={goal} onChange={setGoal} />
+          <Field label="목표" hint={`여러 개 선택 가능 · 최대 ${AI_MAX_GOALS}개`}>
+            <Pills options={AI_GOALS} value={goals} onChange={handleGoals} multi />
+            {bodyGoal.suggestedGoals && goals.length === bodyGoal.suggestedGoals.length && bodyGoal.suggestedGoals.every(g => goals.includes(g)) && (
+              <span className="text-m-caption text-letusBlue leading-relaxed">{bodyGoal.hint.direction === '유지' ? '내 목표 근처라 체력 유지로 골랐어요.' : `내 목표(${bodyGoal.hint.direction} 필요 ${bodyGoal.hint.level})에 맞춰 골랐어요.`} 바꿔도 돼요.</span>
+            )}
+            {goals.length > 1 && <span className="text-m-caption text-gray-400 leading-relaxed">고른 목표를 운동마다 나눠 섞어서 구성해요. 예) 근비대 + 체지방 감량 → 앞쪽 운동은 근비대, 뒤쪽 운동은 짧은 휴식·수퍼세트.</span>}
           </Field>
           <Field label="운동 경력">
             <Pills options={AI_LEVELS} value={level} onChange={setLevel} />
@@ -282,7 +296,7 @@ export default function AiRoutineModal({ onClose, onDraft }) {
               checked={prefs.useBody}
               onChange={v => setPref('useBody', v)}
               title="체형 정보 함께 보내기"
-              desc="키·몸무게·성별·나이를 참고해 운동 선택과 강도를 조절해요. 건강 정보라서 직접 켠 때만 보내요."
+              desc="키·몸무게·성별·나이·체지방률(신체 기록에 있으면)을 참고해 운동 선택과 강도, 여러 목표를 섞는 비중을 조절해요. 건강 정보라서 직접 켠 때만 보내요."
             />
           </div>
 

@@ -47,6 +47,7 @@ export default function AiReviewBox({ rows, request, onReplace }) {
             목표
             <select value={r.goal} onChange={e => r.setGoal(e.target.value)} disabled={r.loading} className="border border-gray-300 rounded-[4px] px-2 min-h-[30px] text-ui-body font-normal text-gray-700 bg-white">
               <option value="">지정 안 함</option>
+              {r.draftGoals.length > 1 && <option value="draft">{r.draftGoals.join(' + ')} (초안 조건)</option>}
               {AI_GOALS.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </label>

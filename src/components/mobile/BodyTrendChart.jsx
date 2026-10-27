@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { BODY_METRICS } from '../../lib/bodyMetrics.js'
+import { useSettings } from '../../context/SettingsContext.jsx'
 
 // 단위·크기가 비슷한 항목끼리 한 그래프로 묶고, 묶음별로 탭을 둔다. (키는 제외)
 const GROUPS = [
@@ -11,12 +12,20 @@ const GROUPS = [
 ]
 
 const COLORS = ['#059669', '#2563eb', '#f59e0b', '#ef4444']
+// 설정의 내 목표(목표 체중·체지방률)를 그래프에 점선으로 그린다. 그 묶음에 해당 지표가 있을 때만.
+const GOAL_LINES = [
+  { key: 'weightKg', setting: 'goalWeightKg', label: '목표 체중' },
+  { key: 'bodyFatPct', setting: 'goalBodyFatPct', label: '목표 체지방률' },
+]
 
 // PWA(모바일) 전용 신체 추이 그래프. (웹앱은 components/BodyTrendChart.jsx)
 export default function BodyTrendChart({ records }) {
   const [groupId, setGroupId] = useState(GROUPS[0].id)
   const group = GROUPS.find(g => g.id === groupId)
   const metrics = group.keys.map(k => BODY_METRICS.find(m => m.key === k))
+  const { settings } = useSettings()
+  const goalLines = GOAL_LINES.filter(g => group.keys.includes(g.key) && settings[g.setting] != null).map(g => ({ ...g, value: settings[g.setting] }))
+  const goalValues = goalLines.map(g => g.value)
 
   const data = [...records]
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -54,9 +63,12 @@ export default function BodyTrendChart({ records }) {
           <LineChart data={data} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
+            <YAxis tick={{ fontSize: 11 }} domain={goalValues.length ? [min => Math.floor(Math.min(min, ...goalValues) - 1), max => Math.ceil(Math.max(max, ...goalValues) + 1)] : ['auto', 'auto']} />
             <Tooltip />
             {metrics.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+            {goalLines.map(g => (
+              <ReferenceLine key={g.key} y={g.value} stroke="#dc2626" strokeDasharray="5 4" label={{ value: `${g.label} ${g.value}`, position: 'insideTopRight', fontSize: 11, fill: '#dc2626' }} />
+            ))}
             {metrics.map((m, i) => (
               <Line key={m.key} type="monotone" name={m.label} dataKey={m.key} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
             ))}

@@ -5,7 +5,7 @@ import { requestRoutineDraft, buildRoutineDraft, buildHistorySummary, fetchBodyI
 
 // AI 루틴 만들어주기 모달(웹앱·PWA)이 같이 쓰는 상태·로직. 화면(렌더링)만 따로 둔다.
 // generate(conditions, repeatDays, options) → 성공하면 루틴 초안, 실패하면 error에 문구를 두고 null.
-//   options: { include: 꼭 넣을 운동 id[], avoid: 빼고 싶은 운동 id[], useHistory: 내 운동 기록 참고, useBody: 체형 정보 전송 }
+//   options: { include: 꼭 넣을 운동 id[], avoid: 빼고 싶은 운동 id[], useHistory: 내 운동 기록 참고, useBody: 체형 정보 전송, goalHint: 내 목표에서 계산한 방향·크기(체형 정보 전송을 켰을 때만 함께 보낸다) }
 export function useAiRoutine() {
   const { exercises, logs, bodyRecords } = useWorkoutLogs()
   const { user } = useAuth()
@@ -24,7 +24,7 @@ export function useAiRoutine() {
       const extra = { include: options.include || [], avoid: options.avoid || [] }
       if (options.useHistory) extra.history = buildHistorySummary(logs, exercises)
       if (options.useBody) {
-        extra.body = await fetchBodyInfo(user.id, bodyRecords)
+        extra.body = await fetchBodyInfo(user.id, bodyRecords, options.goalHint)
         if (!extra.body) throw new Error('보낼 체형 정보가 없어요. "내 정보"에 키·몸무게 등을 입력하거나, 체형 정보 전송을 해제해 주세요.')
       }
       const result = await requestRoutineDraft(conditions, exercises, extra)
