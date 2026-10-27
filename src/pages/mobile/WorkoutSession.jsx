@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { X, Check, Link2 } from 'lucide-react'
+import { X, Check, Link2, Flame, PersonStanding } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useBackHandler } from '../../context/BackNavigationContext.jsx'
 import { notifyRestEnd, unlockAudio } from '../../lib/restAlert.js'
 import ExerciseGuide from '../../components/mobile/ExerciseGuide.jsx'
+import StretchSheet from '../../components/mobile/StretchSheet.jsx'
+import { stretchPlan, planMinutes } from '../../lib/stretchGuide.js'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
 import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
@@ -194,6 +196,7 @@ export default function WorkoutSession() {
   const [reviewIdx, setReviewIdx] = useState(null)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState(null)
+  const [stretchKind, setStretchKind] = useState(null) // 워밍업('warmup')·스트레칭('cooldown') 시트
   const reviewEnteredAtRef = useRef(null) // 끝낸 세트를 보기 시작한 시각 — 그동안은 현재 세트 소요 시간에서 빼 준다
 
   // 그룹이 바뀌면(다음 운동/수퍼세트로 넘어가면) 진행 상태를 전부 초기화
@@ -341,6 +344,12 @@ export default function WorkoutSession() {
   // 바뀐 목표는 루틴과, 이미 미리 만들어진 같은 운동의 앞으로 예정된 기록(2주치)에 같이 반영한다 — 루틴만 고치면 미리 만든 기록은 옛 목표 그대로라서.
   const planOf = log => routines.find(r => r.id === log.routineId)?.exercises.find(e => e.exercise === log.exercise)
   const metaOf = log => exerciseCatalog.find(e => e.name === log.exercise)
+
+  // 워밍업(운동 전)·스트레칭(운동 후) 시트: 열려 있는 종류와, 그 시트에 쓸 오늘 운동의 근육
+  //  - 워밍업은 아직 안 한 운동의 근육, 스트레칭은 오늘 루틴 전체의 근육
+  const musclesOf = ids => ids.map(id => logs.find(l => l.id === id)).filter(Boolean).flatMap(l => metaOf(l)?.muscles || [])
+  const warmupMuscles = musclesOf(sessionIds.filter(id => !initiallyDone.has(id)))
+  const cooldownMuscles = musclesOf(sessionIds)
   // 수퍼세트에 든 운동인가(자기 자신이 "다음과 묶기"이거나 바로 앞 운동이 묶기) — 세트 사이 간격에 짝 운동 시간이 끼므로 휴식 판단에서 뺀다
   const inSuperset = log => {
     const day = logs.filter(l => l.routineId === log.routineId && l.date === log.date)
@@ -597,6 +606,15 @@ export default function WorkoutSession() {
                   })}
                 </div>
               </div>
+              {/* 운동 전 워밍업 — 오늘 하는 부위에 맞는 동적 동작(타이머 포함) */}
+              <button
+                type="button"
+                onClick={() => setStretchKind('warmup')}
+                className="w-full shrink-0 flex items-center justify-center gap-2 min-h-[44px] rounded-xl border border-gray-200 bg-white text-m-body font-bold text-gray-700 active:bg-gray-50"
+              >
+                <Flame className="w-4 h-4 text-orange-500" />
+                운동 전 워밍업 · 약 {planMinutes(stretchPlan('warmup', warmupMuscles))}분
+              </button>
               <button
                 onClick={() => startStep(0, null)}
                 className="w-full h-16 shrink-0 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all"
@@ -741,14 +759,26 @@ export default function WorkoutSession() {
             </div>
           )}
 
+          {/* 운동 후 스트레칭 — 오늘 쓴 부위에 맞는 정적 스트레칭(타이머 포함) */}
+          <button
+            type="button"
+            onClick={() => setStretchKind('cooldown')}
+            className="mt-4 w-full max-w-sm flex items-center justify-center gap-2 min-h-[48px] rounded-2xl border border-gray-200 bg-white text-m-body font-bold text-gray-700 active:bg-gray-50"
+          >
+            <PersonStanding className="w-4 h-4 text-letusBlue" />
+            운동 후 스트레칭 · 약 {planMinutes(stretchPlan('cooldown', cooldownMuscles))}분
+          </button>
+
           <button
             onClick={() => navigate(LOG_PATH)}
-            className="mt-6 w-full max-w-sm bg-letusBlue text-white font-black text-m-title py-4 rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition-colors"
+            className="mt-2 w-full max-w-sm bg-letusBlue text-white font-black text-m-title py-4 rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition-colors"
           >
             캘린더로 돌아가기
           </button>
         </div>
       )}
+
+      {stretchKind && <StretchSheet kind={stretchKind} muscles={stretchKind === 'warmup' ? warmupMuscles : cooldownMuscles} onClose={() => setStretchKind(null)} />}
     </div>
   )
 }

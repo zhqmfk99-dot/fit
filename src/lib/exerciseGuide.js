@@ -9,6 +9,9 @@ export const youtubeGuideUrl = name => {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(n.endsWith('운동') ? `${n} 자세` : `${n} 운동 자세`)}`
 }
 
+// 스트레칭·워밍업 동작 검색어: "<동작 이름> 방법" (lib/stretchGuide.js의 동작에 쓴다)
+export const youtubeHowToUrl = name => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${String(name).trim()} 방법`)}`
+
 export const GUIDE_COLOR = '#2563eb'
 
 // react-body-highlighter에 넘길 데이터(없으면 빈 배열 → 몸통만 그린다)
