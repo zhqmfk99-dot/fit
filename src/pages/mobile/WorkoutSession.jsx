@@ -5,6 +5,7 @@ import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useBackHandler } from '../../context/BackNavigationContext.jsx'
 import { notifyRestEnd, unlockAudio } from '../../lib/restAlert.js'
+import ExerciseGuide from '../../components/mobile/ExerciseGuide.jsx'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
 import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
@@ -556,6 +557,8 @@ export default function WorkoutSession() {
                         <div className="text-m-body font-bold text-gray-400">
                           {l.targetSets}세트 × {l.targetReps}회 × {kgLabel(l.targetWeight)} 목표
                         </div>
+                        {/* 쓰는 근육(신체도) + 유튜브 자세 영상 검색 */}
+                        <ExerciseGuide compact name={l.exercise} muscles={metaOf(l)?.muscles || []} />
                         {/* 지난번 수행 → 평가 → 위 목표가 나온 이유 */}
                         <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-m-caption leading-relaxed">
                           {last ? (

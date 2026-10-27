@@ -1,6 +1,7 @@
 import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { MUSCLE_LABELS } from '../lib/muscleMap.js'
 import { equipmentBadgeClass } from '../lib/equipmentStyle.js'
+import ExerciseGuide from './mobile/ExerciseGuide.jsx'
 
 export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) {
   useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
@@ -36,6 +37,11 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
                 </span>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-m-body font-bold text-gray-600 mb-1.5">쓰는 근육 · 자세</label>
+            <ExerciseGuide name={row.name} muscles={row.muscles} />
           </div>
 
           <div>

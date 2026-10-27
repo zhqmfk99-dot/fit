@@ -1,11 +1,16 @@
-﻿import { repsText } from '../../lib/progression.js'
+﻿import CalendarAddModal from './CalendarAddModal.jsx'
+import { CalendarPlus } from 'lucide-react'
+import { useState } from 'react'
+import { repsText } from '../../lib/progression.js'
 
 const ALL_DAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 export default function RoutineDetailModal({ row, onClose, onEdit, onDelete }) {
+  const [showCalendar, setShowCalendar] = useState(false)
   if (!row) return null
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] backdrop-blur-sm p-4 fade-in">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-[440px] overflow-hidden flex flex-col slide-up">
         <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-white">
@@ -69,6 +74,15 @@ export default function RoutineDetailModal({ row, onClose, onEdit, onDelete }) {
               ))
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowCalendar(true)}
+            className="w-full flex items-center justify-center gap-2 min-h-[40px] rounded-lg border border-gray-200 bg-white text-ui-body font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <CalendarPlus className="w-4 h-4 text-letusBlue" />
+            캘린더에 추가
+          </button>
         </div>
 
         <div className="p-4 border-t border-gray-200 bg-white flex items-center justify-between gap-2">
@@ -104,5 +118,7 @@ export default function RoutineDetailModal({ row, onClose, onEdit, onDelete }) {
         </div>
       </div>
     </div>
+    {showCalendar && <CalendarAddModal routine={row} onClose={() => setShowCalendar(false)} />}
+    </>
   )
 }

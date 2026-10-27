@@ -1,5 +1,6 @@
 ﻿import { MUSCLE_LABELS } from '../../lib/muscleMap.js'
 import { equipmentBadgeClass } from '../../lib/equipmentStyle.js'
+import ExerciseGuide from './ExerciseGuide.jsx'
 
 export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) {
   if (!row) return null
@@ -34,6 +35,11 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
                 </span>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-ui-body font-bold text-gray-600 mb-1.5">쓰는 근육 · 자세</label>
+            <ExerciseGuide name={row.name} muscles={row.muscles} />
           </div>
 
           <div>
