@@ -8,6 +8,8 @@ import BodyTrendChart from '../../components/mobile/BodyTrendChart.jsx'
 import CalorieTrendChart from '../../components/mobile/CalorieTrendChart.jsx'
 import WeeklyReportCard from '../../components/mobile/WeeklyReportCard.jsx'
 import GoalProgressCard from '../../components/mobile/GoalProgressCard.jsx'
+import DeloadCard from '../../components/mobile/DeloadCard.jsx'
+import WeeklyGoalCard from '../../components/mobile/WeeklyGoalCard.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { totalVolume, unilateralNames } from '../../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../../lib/muscleMap.js'
@@ -49,6 +51,8 @@ export default function MobileDashboard() {
           <StatCard label="평균 피로도" value={avgFatigue} unit="/5" icon={Flame} color="text-orange-500" />
         </div>
 
+        <DeloadCard />
+        <WeeklyGoalCard />
         <WeeklyReportCard />
         <GoalProgressCard />
 

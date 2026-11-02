@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader.jsx'
 import ProfileModal from '../components/web/ProfileModal.jsx'
+import ImportLogsModal from '../components/web/ImportLogsModal.jsx'
 import GoalSettingsFields from '../components/web/GoalSettingsFields.jsx'
 import { useAuth, MIN_PASSWORD_LENGTH } from '../context/AuthContext.jsx'
 import { useSettings, SETTING_LIMITS } from '../context/SettingsContext.jsx'
@@ -61,6 +62,7 @@ export default function WorkoutSettings() {
   const { settings, update, accountSync, saveError } = useSettings()
   const [showProfile, setShowProfile] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [showImport, setShowImport] = useState(false) // 운동 기록 가져오기 창
   const [pw, setPw] = useState({ next: '', confirm: '' })
   const [pwMessage, setPwMessage] = useState({ text: '', ok: false })
   const [busy, setBusy] = useState(false)
@@ -235,6 +237,7 @@ export default function WorkoutSettings() {
         <Section title="데이터">
           <Row title="운동 기록 내려받기" desc={`완료한 운동 ${exp.logCount}세트를 CSV 파일로 저장해요.`} onClick={exp.exportLogs} right={<span className="text-ui-body font-bold text-letusBlue">내려받기</span>} />
           <Row title="신체 기록 내려받기" desc={`신체 기록 ${exp.bodyCount}건을 CSV 파일로 저장해요.`} onClick={exp.exportBody} right={<span className="text-ui-body font-bold text-letusBlue">내려받기</span>} />
+          <Row title="운동 기록 가져오기" desc="CSV 파일이나 표를 붙여넣어 과거 운동 기록을 가져와요. 미리 보고 확인한 뒤 가져와요." onClick={() => setShowImport(true)} right={<span className="text-ui-body font-bold text-letusBlue">가져오기</span>} />
           {exp.message && <div className="px-4 py-3 text-ui-body font-bold text-letusBlue bg-blue-50">{exp.message}</div>}
         </Section>
 
@@ -246,6 +249,7 @@ export default function WorkoutSettings() {
       </div>
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showImport && <ImportLogsModal onClose={() => setShowImport(false)} />}
     </div>
   )
 }

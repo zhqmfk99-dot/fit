@@ -1,8 +1,9 @@
-﻿import { useState } from 'react'
-import { Plus, Pencil, Trash2, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Pencil, Trash2, Sparkles, LayoutList } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import RoutineFormModal from '../components/web/RoutineFormModal.jsx'
 import AiRoutineModal from '../components/web/AiRoutineModal.jsx'
+import SplitPlanModal from '../components/web/SplitPlanModal.jsx'
 import RoutineDetailModal from '../components/web/RoutineDetailModal.jsx'
 import { repsText } from '../lib/progression.js'
 import { useRoutineManager } from '../hooks/useRoutineManager.js'
@@ -28,6 +29,8 @@ export default function WorkoutRoutine() {
     draftRow,
     openCreate,
     openAiCreate,
+    showSplitModal,
+    setShowSplitModal,
     handleAiDraft,
     setShowAiModal,
     handleFormSave,
@@ -92,6 +95,13 @@ export default function WorkoutRoutine() {
             >
               <Sparkles className="w-3.5 h-3.5" />
               AI로 만들기
+            </button>
+            <button
+              onClick={() => setShowSplitModal(true)}
+              className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-700 text-ui-body font-bold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+              분할로 만들기
             </button>
             <button
               onClick={openCreate}
@@ -204,6 +214,7 @@ export default function WorkoutRoutine() {
       </div>
 
       {showAiModal && <AiRoutineModal onClose={() => setShowAiModal(false)} onDraft={handleAiDraft} />}
+      {showSplitModal && <SplitPlanModal onClose={() => setShowSplitModal(false)} />}
       {showFormModal && <RoutineFormModal row={formRow} draft={draftRow} draftNote={draftRow?.note} onClose={() => setShowFormModal(false)} onSave={handleFormSave} />}
       {detailRow && (
         <RoutineDetailModal

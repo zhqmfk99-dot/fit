@@ -5,6 +5,7 @@
 import { supabase } from './supabase.js'
 import { MUSCLE_LABELS, UPPER_BODY_MUSCLES, LOWER_BODY_MUSCLES } from './muscleMap.js'
 import { calcBmi } from './bodyMetrics.js'
+import { lastWeightFor } from './lastWeight.js'
 
 export const AI_GOALS = ['근비대', '근력', '체지방 감량', '체력 유지']
 export const AI_MAX_GOALS = 3 // 목표는 여러 개 고를 수 있다(서버 MAX_GOALS와 같아야 한다). 여러 개면 AI가 운동마다 나눠 섞는다.
@@ -63,16 +64,9 @@ export function buildCatalogPayload(exercises, equipment, avoidIds = [], include
     }))
 }
 
-// 이 운동을 마지막으로 했을 때의 무게(없으면 null). 목표 무게가 있으면 그것, 없으면 수행한 세트의 최대 무게.
-export function lastWeightFor(exerciseName, logs) {
-  const done = logs
-    .filter(l => l.exercise === exerciseName && l.isCompleted && l.performedSets?.length)
-    .sort((a, b) => b.date.localeCompare(a.date))
-  const last = done[0]
-  if (!last) return null
-  const w = last.targetWeight || Math.max(...last.performedSets.map(s => s.weight || 0))
-  return w > 0 ? w : null
-}
+// 이 운동을 마지막으로 했을 때의 무게(없으면 null) — 구현은 lastWeight.js(서버 연결 없는 순수 함수)
+export { lastWeightFor }
+
 
 const pad = n => String(n).padStart(2, '0')
 const dateStr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`

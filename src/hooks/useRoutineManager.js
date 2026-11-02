@@ -13,6 +13,7 @@ export function useRoutineManager() {
   // AI 루틴 만들기: 조건 입력 모달 → 만들어진 초안(draftRow)을 루틴 등록 화면에 채워 연다 (수정이 아니라 새 루틴이라 formRow는 null)
   const [showAiModal, setShowAiModal] = useState(false)
   const [draftRow, setDraftRow] = useState(null)
+  const [showSplitModal, setShowSplitModal] = useState(false) // 분할 프리셋으로 여러 루틴을 한 번에 만드는 창 (lib/splitPlan.js)
 
   const openCreate = () => {
     setFormRow(null)
@@ -67,6 +68,8 @@ export function useRoutineManager() {
     formRow,
     detailRow,
     showAiModal,
+    showSplitModal,
+    setShowSplitModal,
     draftRow,
     openCreate,
     openAiCreate,

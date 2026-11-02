@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, LogOut, Smartphone, Bell, Download } from 'lucide-react'
+import { ChevronRight, LogOut, Smartphone, Bell, Download, Upload } from 'lucide-react'
 import PageHeader from '../../components/PageHeader.jsx'
 import ProfileModal from '../../components/ProfileModal.jsx'
+import ImportLogsModal from '../../components/mobile/ImportLogsModal.jsx'
 import GoalSettingsFields from '../../components/mobile/GoalSettingsFields.jsx'
 import { useAuth, MIN_PASSWORD_LENGTH } from '../../context/AuthContext.jsx'
 import { useSettings, SETTING_LIMITS } from '../../context/SettingsContext.jsx'
@@ -69,6 +70,7 @@ export default function MobileSettings() {
   const [showProfile, setShowProfile] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showInstall, setShowInstall] = useState(false)
+  const [showImport, setShowImport] = useState(false) // 운동 기록 가져오기 창
   const [pw, setPw] = useState({ next: '', confirm: '' })
   const [pwMessage, setPwMessage] = useState({ text: '', ok: false })
   const [busy, setBusy] = useState(false)
@@ -298,6 +300,7 @@ export default function MobileSettings() {
         <Section title="데이터">
           <Row title="운동 기록 내려받기" desc={`완료한 운동 ${exp.logCount}세트를 CSV 파일로 저장해요.`} onClick={exp.exportLogs} right={<Download className="w-4 h-4 text-gray-400 shrink-0" />} />
           <Row title="신체 기록 내려받기" desc={`신체 기록 ${exp.bodyCount}건을 CSV 파일로 저장해요.`} onClick={exp.exportBody} right={<Download className="w-4 h-4 text-gray-400 shrink-0" />} />
+          <Row title="운동 기록 가져오기" desc="CSV 파일이나 표를 붙여넣어 과거 운동 기록을 가져와요. 미리 보고 확인한 뒤 가져와요." onClick={() => setShowImport(true)} right={<Upload className="w-4 h-4 text-gray-400 shrink-0" />} />
           {exp.message && <div className="px-4 py-3 text-m-caption font-bold text-letusBlue bg-blue-50">{exp.message}</div>}
         </Section>
 
@@ -337,6 +340,7 @@ export default function MobileSettings() {
       </div>
 
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showImport && <ImportLogsModal onClose={() => setShowImport(false)} />}
     </div>
   )
 }

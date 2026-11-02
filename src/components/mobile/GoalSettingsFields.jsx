@@ -74,7 +74,24 @@ export default function GoalSettingsFields() {
           )}
         </div>
       </div>
-      <div className="px-4 py-3 text-m-caption text-gray-400 leading-relaxed">
+      <div className="px-4 py-3">
+        <div className="text-m-body font-bold text-gray-800">주간 운동 목표</div>
+        <div className="mt-0.5 text-m-caption text-gray-400 leading-relaxed">일주일(월~일)에 몇 일 운동할지 정하면 대시보드에서 달성 현황과 연속 달성 주를 보여줘요.</div>
+        <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="주간 운동 목표">
+          {[1, 2, 3, 4, 5, 6, 7].map(n => (
+            <button
+              key={n}
+              type="button"
+              aria-pressed={settings.weeklyGoalDays === n}
+              onClick={() => update({ weeklyGoalDays: settings.weeklyGoalDays === n ? null : n })}
+              className={`min-h-[36px] px-3 rounded-full border text-m-body font-bold ${settings.weeklyGoalDays === n ? 'bg-blue-50 border-letusBlue text-letusBlue' : 'bg-white border-gray-200 text-gray-600 active:bg-gray-50'}`}
+            >
+              주 {n}일
+            </button>
+          ))}
+        </div>
+        {settings.weeklyGoalDays != null && <div className="mt-1.5 text-m-caption text-gray-400">같은 칩을 다시 누르면 목표를 해제해요.</div>}
+      </div>      <div className="px-4 py-3 text-m-caption text-gray-400 leading-relaxed">
         {nowText ? `지금 몸 상태(최근 신체 기록 평균): ${nowText}. ` : '신체 기록이 없어 지금 몸 상태를 알 수 없어요. 기록 화면에서 신체 기록을 추가해 주세요. '}
         목표는 대시보드의 진행 카드·신체 추이 그래프, AI 루틴 만들기의 목표 칩·섞는 비율에 쓰여요. 비워 두면 해당 목표는 쓰지 않아요.
       </div>

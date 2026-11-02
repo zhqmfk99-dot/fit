@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from './AuthContext.jsx'
 import { EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
+import { sanitizeGoalDays } from '../lib/weeklyGoal.js'
+import { sanitizePresets } from '../lib/splitPlan.js'
 import { GOAL_LIMITS } from '../lib/bodyGoal.js'
 
 // 앱 설정 — 계정(profiles.settings)에 저장해서 기기를 바꿔도 같게 한다. (supabase/user_settings.sql)
@@ -22,6 +24,8 @@ export const DEFAULT_SETTINGS = {
   goalWeightKg: null, // 내 목표: 목표 체중(kg). 비우면 null
   goalBodyFatPct: null, // 내 목표: 목표 체지방률(%)
   goalDate: '', // 내 목표: 목표일(YYYY-MM-DD, 선택)
+  splitPresets: [], // 내가 저장한 분할 프리셋(최대 5개) — 루틴 화면의 "분할로 한 번에 만들기" (lib/splitPlan.js)
+  weeklyGoalDays: null, // 주간 운동 목표(주 N일, 1~7). 비우면 null — 대시보드 주간 운동 목표 카드(lib/weeklyGoal.js)
   myEquipment: [], // 내 운동기구(쓸 수 있는 기구) — AI 루틴 만들기의 "사용할 장비"에 자동 선택된다. 비면 전체. 맨몸은 기구가 필요 없어 항상 포함이라 저장하지 않는다.
 }
 
@@ -50,6 +54,8 @@ export function sanitizeSettings(raw) {
     goalWeightKg: goalNumber(r.goalWeightKg, GOAL_LIMITS.weightMin, GOAL_LIMITS.weightMax),
     goalBodyFatPct: goalNumber(r.goalBodyFatPct, GOAL_LIMITS.fatMin, GOAL_LIMITS.fatMax),
     goalDate: /^\d{4}-\d{2}-\d{2}$/.test(r.goalDate) && !Number.isNaN(Date.parse(r.goalDate)) ? r.goalDate : '',
+    weeklyGoalDays: sanitizeGoalDays(r.weeklyGoalDays),
+    splitPresets: sanitizePresets(r.splitPresets),
     myEquipment: Array.isArray(r.myEquipment) ? [...new Set(r.myEquipment.filter(e => EQUIPMENT_OPTIONS.includes(e) && e !== '맨몸'))] : [],
   }
 }

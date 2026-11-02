@@ -8,6 +8,8 @@ import BodyTrendChart from '../components/BodyTrendChart.jsx'
 import CalorieTrendChart from '../components/web/CalorieTrendChart.jsx'
 import WeeklyReportCard from '../components/web/WeeklyReportCard.jsx'
 import GoalProgressCard from '../components/web/GoalProgressCard.jsx'
+import DeloadCard from '../components/web/DeloadCard.jsx'
+import WeeklyGoalCard from '../components/web/WeeklyGoalCard.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { totalVolume, unilateralNames } from '../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../lib/muscleMap.js'
@@ -48,6 +50,8 @@ export default function WorkoutDashboard() {
           <StatCard horizontal label="평균 피로도" value={avgFatigue} unit="/5" icon={Flame} color="text-orange-500" />
         </div>
 
+        <DeloadCard />
+        <WeeklyGoalCard />
         <WeeklyReportCard />
         <GoalProgressCard />
 

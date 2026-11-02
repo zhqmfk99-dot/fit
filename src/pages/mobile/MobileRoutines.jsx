@@ -1,7 +1,8 @@
-import { Plus, Pencil, Check, Sparkles } from 'lucide-react'
+import { Plus, Pencil, Check, Sparkles, LayoutList } from 'lucide-react'
 import PageHeader from '../../components/PageHeader.jsx'
 import RoutineFormModal from '../../components/RoutineFormModal.jsx'
 import AiRoutineModal from '../../components/AiRoutineModal.jsx'
+import SplitPlanModal from '../../components/mobile/SplitPlanModal.jsx'
 import RoutineDetailModal from '../../components/RoutineDetailModal.jsx'
 import { repsText } from '../../lib/progression.js'
 import { useRoutineManager } from '../../hooks/useRoutineManager.js'
@@ -21,6 +22,8 @@ export default function MobileRoutines() {
     draftRow,
     openCreate,
     openAiCreate,
+    showSplitModal,
+    setShowSplitModal,
     handleAiDraft,
     setShowAiModal,
     enterEditMode,
@@ -96,6 +99,13 @@ export default function MobileRoutines() {
           AI로 루틴 만들기
         </button>
         <button
+          onClick={() => setShowSplitModal(true)}
+          className="w-full flex items-center justify-center gap-1.5 border border-letusBlue text-letusBlue rounded-lg py-3 text-m-body font-bold active:bg-blue-50 transition-colors"
+        >
+          <LayoutList className="w-4 h-4" />
+          분할로 한 번에 만들기
+        </button>
+        <button
           onClick={openCreate}
           className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-lg py-3 text-m-body font-bold text-gray-400 active:border-letusBlue active:text-letusBlue transition-colors"
         >
@@ -133,6 +143,7 @@ export default function MobileRoutines() {
       </div>
 
       {showAiModal && <AiRoutineModal onClose={() => setShowAiModal(false)} onDraft={handleAiDraft} />}
+      {showSplitModal && <SplitPlanModal onClose={() => setShowSplitModal(false)} />}
       {showFormModal && <RoutineFormModal row={formRow} draft={draftRow} draftNote={draftRow?.note} onClose={() => setShowFormModal(false)} onSave={handleFormSave} />}
       {detailRow && (
         <RoutineDetailModal
