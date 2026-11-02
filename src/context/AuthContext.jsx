@@ -35,16 +35,19 @@ export function AuthProvider({ children }) {
   const signUp = (email, password, name) => supabase.auth.signUp({ email, password, options: { data: { name: name.trim() } } })
   const signOut = () => supabase.auth.signOut()
 
+  // 아이디·비밀번호 찾기는 로그인 전에도 부를 수 있어서 서버가 횟수를 제한한다(supabase/auth_rate_limit.sql) — 한도를 넘으면 'rate_limited' 오류가 온다
+  const lookupError = error => (error && /rate_limited/.test(error.message || '') ? { ...error, message: '요청이 너무 많아요. 10분쯤 뒤에 다시 시도해 주세요.' } : error)
+
   // 이름으로 가입한 아이디(이메일) 전부 조회
   const findIdsByName = async name => {
     const { data, error } = await supabase.rpc('find_ids_by_name', { p_name: name })
-    return { ids: (data ?? []).map(r => r.email), error }
+    return { ids: (data ?? []).map(r => r.email), error: lookupError(error) }
   }
 
   // 아이디+이름이 일치하면 재설정 메일을 보낸다. 일치하지 않으면 matched=false
   const requestPasswordReset = async (email, name) => {
     const { data: matched, error } = await supabase.rpc('check_id_name', { p_email: email, p_name: name })
-    if (error) return { matched: false, error }
+    if (error) return { matched: false, error: lookupError(error) }
     if (!matched) return { matched: false, error: null }
     const { error: mailError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin })
     return { matched: true, error: mailError }
