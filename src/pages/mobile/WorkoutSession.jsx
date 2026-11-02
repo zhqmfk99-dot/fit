@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { X, Check, Link2, Flame, PersonStanding, ArrowLeftRight, SkipForward, Flag } from 'lucide-react'
+import { X, Check, Link2, Flame, PersonStanding, ArrowLeftRight, SkipForward, Flag, Plus, Minus } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useBackHandler } from '../../context/BackNavigationContext.jsx'
@@ -11,6 +11,9 @@ import SwapExerciseSheet from '../../components/mobile/SwapExerciseSheet.jsx'
 import { sessionExcludeNames, routineExerciseNames, swapLogs, swapRoutine } from '../../lib/exerciseSwap.js'
 import { lastWeightFor } from '../../lib/aiRoutine.js'
 import { isSkipped } from '../../lib/logStatus.js'
+import { warmupSets, warmupTargetId, warmupText } from '../../lib/warmupSets.js'
+import { platesPerSide, platesText, BAR_KG } from '../../lib/plateMath.js'
+import { newRecordsOf, formatKg } from '../../lib/exerciseStats.js'
 import { stretchPlan, planMinutes } from '../../lib/stretchGuide.js'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
 import { useDayKcal } from '../../hooks/useDayKcal.js'
@@ -18,7 +21,7 @@ import { useDayDuration } from '../../hooks/useDayDuration.js'
 import { formatDuration } from '../../lib/workoutTime.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { draftKey, saveDraft, loadDraft, clearDraft, pruneOldDrafts, draftSummary, resumeStepIndex } from '../../lib/sessionDraft.js'
-import { evaluateSession, applyNextToPlan, findPrevLog, findPrevLogs, summarizePerformed } from '../../lib/progression.js'
+import { evaluateSession, applyNextToPlan, findPrevLog, findPrevLogs, summarizePerformed, FEEL_LABELS, FEEL_KEYS } from '../../lib/progression.js'
 
 // 평가 결과(올리기/유지/낮추기)에 따른 글자색·기호
 const VERDICT_STYLE = {
@@ -27,10 +30,18 @@ const VERDICT_STYLE = {
   hold: { color: 'text-gray-500', icon: '＝' },
   deload: { color: 'text-orange-600', icon: '▼' },
 }
+// 체감 난이도 버튼: 고른 것의 색 (표준 색 클래스라 다크 모드가 자동 적용된다)
+const FEEL_ON = {
+  easy: 'bg-emerald-50 border-emerald-400 text-emerald-700',
+  ok: 'bg-blue-50 border-letusBlue text-letusBlue',
+  hard: 'bg-orange-50 border-orange-400 text-orange-700',
+}
 const kgLabel = w => (w ? `${w}kg` : '맨몸')
 
 // 세션이 끝나거나 종료할 때 돌아갈 곳 — 모바일 기록 화면 (데스크탑 경로 /workout/log로 가면 헤더 없는 데스크탑 화면이 열린다)
 const LOG_PATH = '/mobile/log'
+// 운동 하나에 오늘만 늘릴 수 있는 세트 수의 상한(실수로 눌러 끝없이 늘어나는 것을 막는다)
+const MAX_SETS = 12
 
 // disabled: 이미 끝낸 세트를 보기만 할 때 — 조절 버튼을 막고 흐리게 보인다
 function StepperCard({ label, value, step, unit, onChange, disabled = false }) {
@@ -143,7 +154,7 @@ export default function WorkoutSession() {
   const [searchParams] = useSearchParams()
   const routineId = searchParams.get('routineId')
   const date = searchParams.get('date')
-  const { logs, setLogs, routines, setRoutines, exercises: exerciseCatalog, skippedSupported } = useWorkoutLogs()
+  const { logs, setLogs, routines, setRoutines, exercises: exerciseCatalog, skippedSupported, feelSupported } = useWorkoutLogs()
   const { settings } = useSettings() // 기본 휴식 시간·화면 꺼짐 방지·점진 과부하 자동 적용
   // 뒤로가기(제스처)는 종료 버튼(X)과 같게 동작한다: 세트·휴식 중이면 확인창, 그 외에는 바로 기록으로.
   // handleExit은 아래(조기 return 뒤)에서 정의되므로 ref로 연결한다. 세션을 못 찾은 화면에서는 false(처리 안 함) → 상위 화면으로 이동.
@@ -169,6 +180,9 @@ export default function WorkoutSession() {
   // 오늘 기록에는 "건너뜀"으로 남는다(미완료지만 "아직 할 운동"으로 세지 않는다).
   const skippedIds = new Set(allSessionLogs.filter(isSkipped).map(l => l.id))
   const [swapLog, setSwapLog] = useState(null) // 운동 바꾸기 시트가 열려 있으면 바꿀 기록
+  // 오늘만 세트 수를 늘리거나 줄인 운동의 증감(기록 id → 계획 대비 ±n). 기록의 목표 세트(targetSets)는 계획 그대로 두고, 세션 안에서만 더하고 뺀다.
+  // 그래서 점진 과부하는 "계획 N세트 중 몇 세트를 했나"로 그대로 판단하고(덜 하면 유지), 루틴·예정 기록의 세트 수는 바뀌지 않는다.
+  const [setDelta, setSetDelta] = useState({})
 
   // 그룹(수퍼세트는 여러 운동이 한 그룹)이 모두 끝났는지 — 목록에서 선택을 막고, 다음에 할 그룹을 찾는 데 쓴다
   const isGroupDone = i => groups[i].every(id => skippedIds.has(id) || logs.find(l => l.id === id)?.isCompleted)
@@ -185,7 +199,8 @@ export default function WorkoutSession() {
   const [groupIdx, setGroupIdx] = useState(() => Math.max(0, groups.findIndex((_, i) => groups[i].some(id => !initiallyDone.has(id) && !skippedIds.has(id)))))
   const hasPendingGroup = groups.some((_, i) => !isGroupDone(i))
   const currentGroupIds = (groups[groupIdx] || []).filter(id => !initiallyDone.has(id))
-  const groupLogs = currentGroupIds.map(id => logs.find(l => l.id === id)).filter(Boolean)
+  const withDelta = l => (setDelta[l.id] ? { ...l, targetSets: Math.max(1, (l.targetSets || 1) + setDelta[l.id]) } : l)
+  const groupLogs = currentGroupIds.map(id => logs.find(l => l.id === id)).filter(Boolean).map(withDelta)
   const flatSteps = groupLogs.length ? buildFlatSteps(groupLogs) : []
 
   // 'ready'(그룹 시작 전) → 'active'(세트 진행중) → 'rest'(휴식 — 수퍼세트 안에서는 건너뜀) → 'finished'
@@ -211,6 +226,9 @@ export default function WorkoutSession() {
   const [restEndAt, setRestEndAt] = useState(null)
   const [restNextAction, setRestNextAction] = useState(null)
   const [progressionNotes, setProgressionNotes] = useState([])
+  // 한쪽씩 하는 운동의 좌→우 안내: 0 = 왼쪽 하는 중, 1 = 오른쪽 하는 중. 세트 하나가 끝나거나 새 세트·운동이 시작되면 0으로 돌아간다. 기록(횟수×무게 한 줄)에는 영향이 없다.
+  const [sidePhase, setSidePhase] = useState(0)
+  const [lastDoneId, setLastDoneId] = useState(null) // 방금 끝낸 운동(휴식 화면에서 체감 난이도를 묻는다) — 운동 하나의 마지막 세트를 끝낸 직후에만
 
   // 끝낸 세트 보기/수정: reviewIdx = 보고 있는 끝낸 세트(0부터, null이면 지금 하는 세트), editing = 수정 중, editForm = 수정 중인 값
   const [reviewIdx, setReviewIdx] = useState(null)
@@ -323,6 +341,7 @@ export default function WorkoutSession() {
     setPendingRestBefore(restBefore)
     setSetForm({ reps: log.targetReps || 0, weight: log.targetWeight || 0 })
     setSetStartAt(Date.now())
+    setSidePhase(0)
     setReviewIdx(null)
     setEditing(false)
     setEditForm(null)
@@ -417,6 +436,55 @@ export default function WorkoutSession() {
   const musclesOf = ids => ids.map(id => logs.find(l => l.id === id)).filter(Boolean).flatMap(l => metaOf(l)?.muscles || [])
   const warmupMuscles = musclesOf(sessionIds.filter(id => !initiallyDone.has(id)))
   const cooldownMuscles = musclesOf(sessionIds)
+  const ratingLog = lastDoneId ? logs.find(l => l.id === lastDoneId && l.isCompleted) ?? null : null // 휴식 화면에서 체감 난이도를 물을 운동
+  const ratable = allSessionLogs.filter(l => l.isCompleted && !initiallyDone.has(l.id)) // 완료 화면에서 체감 난이도를 고를 수 있는 오늘 한 운동
+  // 웜업 세트 제안(lib/warmupSets.js): 오늘 첫 복합관절 운동에만, 본 세트 무게 기준으로 가벼운 무게부터. 표시용이라 기록에는 넣지 않는다.
+  const warmupId = warmupTargetId(sessionIds.map(id => logs.find(l => l.id === id)).filter(Boolean), metaOf)
+  // 운동 메모(기구 세팅·자세 포인트): 운동 리스트의 메모를 시작 화면과 첫 세트 전 화면에 보여 준다
+  const renderNote = log => {
+    const note = metaOf(log)?.note
+    if (!note) return null
+    return (
+      <div className="mt-2 rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-m-caption leading-relaxed">
+        <div className="font-bold text-orange-800">메모</div>
+        <div className="whitespace-pre-wrap text-gray-700">{note}</div>
+      </div>
+    )
+  }
+  const renderWarmup = log => {
+    if (log.id !== warmupId || log.isCompleted) return null
+    const sets = warmupSets(log.targetWeight, { equipment: metaOf(log)?.equipment })
+    if (!sets.length) return null
+    return (
+      <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-m-caption leading-relaxed">
+        <div className="font-bold text-letusBlue">웜업 세트 제안 · 본 세트 전에</div>
+        <div className="font-bold text-gray-700">{warmupText(sets)} → 본 세트 {kgLabel(log.targetWeight)}</div>
+        <div className="text-gray-400">참고용이에요. 기록에는 넣지 않아요. 몸 상태에 맞게 줄이거나 늘리세요.</div>
+      </div>
+    )
+  }
+  // 원판 계산기(lib/plateMath.js): 바벨 운동의 지금 입력한 무게를 한쪽에 끼울 원판으로 풀어 보여 준다(봉 20kg 기준).
+  const renderPlates = weight => {
+    const r = platesPerSide(weight)
+    if (r.kind === 'invalid') return null
+    return (
+      <div className="px-1 text-m-caption font-bold text-gray-500">
+        {r.kind === 'light' && `빈 봉(${BAR_KG}kg)보다 가벼워요`}
+        {r.kind === 'bar' && `빈 봉만 (${BAR_KG}kg)`}
+        {r.kind === 'plates' && (
+          <>
+            <span className="text-gray-400">한쪽 원판 </span>
+            {platesText(r.perSide)}kg
+            <span className="font-normal text-gray-400"> · 봉 {BAR_KG}kg</span>
+            {!r.exact && <span className="font-normal text-orange-600"> · 1.25kg 단위로 {r.shortKg}kg 모자라요</span>}
+          </>
+        )}
+      </div>
+    )
+  }
+  // 오늘 갱신한 개인 기록(lib/exerciseStats.js): 이전 기록보다 최고 무게·예상 1RM(맨몸은 최대 횟수)이 나아진 운동. 처음 하는 운동은 갱신이 아니다.
+  const recordLabel = r => (r.kind === 'weight' ? `최고 무게 ${formatKg(r.value)} (이전 ${formatKg(r.prev)})` : r.kind === 'e1rm' ? `예상 1RM ${formatKg(r.value)} (이전 ${formatKg(r.prev)})` : `최대 횟수 ${r.value}회 (이전 ${r.prev}회)`)
+  const todayRecords = ratable.map(l => ({ log: l, recs: newRecordsOf(logs, l) })).filter(x => x.recs.length)
   const skippedLogs = [...skippedIds].map(id => logs.find(l => l.id === id)).filter(Boolean) // 완료 화면에 알려 줄 건너뛴 운동
   // 수퍼세트에 든 운동인가(자기 자신이 "다음과 묶기"이거나 바로 앞 운동이 묶기) — 세트 사이 간격에 짝 운동 시간이 끼므로 휴식 판단에서 뺀다
   const inSuperset = log => {
@@ -424,15 +492,44 @@ export default function WorkoutSession() {
     const i = day.findIndex(l => l.id === log.id)
     return !!log.linkedToNext || (i > 0 && !!day[i - 1].linkedToNext)
   }
-  const applyProgression = (log, performedSets, fatigue) => {
+  // revert: 체감 난이도를 나중에 골라 다시 평가할 때, 앞서 올려 둔 목표를 되돌려야 하면 유지여도 목표를 다시 쓴다
+  const applyProgression = (log, performedSets, fatigue, { revert = false } = {}) => {
     if (!log.routineId) return
-    const result = evaluateSession({ log: { ...log, performedSets, fatigue }, plan: planOf(log), prevLogs: findPrevLogs(logs, log), meta: metaOf(log), skipRest: inSuperset(log) })
+    const stored = logs.find(l => l.id === log.id) ?? log // 오늘만 바꾼 세트 수가 아니라 계획한 세트 수(기록의 목표)로 평가한다
+    const result = evaluateSession({ log: { ...stored, feel: log.feel, performedSets, fatigue }, plan: planOf(log), prevLogs: findPrevLogs(logs, log), meta: metaOf(log), skipRest: inSuperset(log) })
     if (!result) return
-    setProgressionNotes(prev => [...prev, { exercise: log.exercise, verdict: result.verdict, label: result.label, reason: result.reason, next: result.next }])
-    if (result.verdict === 'hold') return // 목표를 그대로 두는 경우는 바꿀 게 없다
+    const note = { exercise: log.exercise, verdict: result.verdict, label: result.label, reason: result.reason, next: result.next }
+    setProgressionNotes(prev => (prev.some(n => n.exercise === log.exercise) ? prev.map(n => (n.exercise === log.exercise ? note : n)) : [...prev, note]))
+    if (result.verdict === 'hold' && !revert) return // 목표를 그대로 두는 경우는 바꿀 게 없다
 
     pushTargets(log, result.next, false)
   }
+
+  // 체감 난이도(쉬웠어요/적당해요/힘들었어요) — 운동을 끝낸 뒤 한 번 눌러 고른다. 같은 걸 다시 누르면 해제.
+  // 운동을 끝내는 순간 이미 규칙대로 다음 목표를 정해 두었으므로, 고르면 그 값을 넣어 다시 평가해서 목표를 고쳐 쓴다(자동 적용을 켠 경우).
+  const rateFeel = log => feel => {
+    const cur = logs.find(l => l.id === log.id)
+    if (!cur) return
+    const value = cur.feel === feel ? null : feel
+    const prevVerdict = progressionNotes.find(n => n.exercise === cur.exercise)?.verdict
+    setLogs(prev => prev.map(l => (l.id === cur.id ? { ...l, feel: value } : l)))
+    if (settings.autoProgression) applyProgression({ ...cur, feel: value }, cur.performedSets, cur.fatigue, { revert: !!prevVerdict && prevVerdict !== 'hold' })
+  }
+  const renderFeel = log => (
+    <div className="flex gap-2" role="group" aria-label={`${log.exercise} 체감 난이도`}>
+      {FEEL_KEYS.map(k => (
+        <button
+          key={k}
+          type="button"
+          aria-pressed={log.feel === k}
+          onClick={() => rateFeel(log)(k)}
+          className={`flex-1 min-h-[40px] rounded-xl border text-m-body font-bold ${log.feel === k ? FEEL_ON[k] : 'bg-white border-gray-200 text-gray-600 active:bg-gray-50'}`}
+        >
+          {FEEL_LABELS[k]}
+        </button>
+      ))}
+    </div>
+  )
 
   // 새 목표를 루틴과, 같은 운동의 앞으로 예정된 기록에 반영한다. includeSelf면 이 기록(오늘 것)에도 반영.
   const pushTargets = (log, next, includeSelf) => {
@@ -459,9 +556,22 @@ export default function WorkoutSession() {
     return { prev, result: evaluateSession({ log: prev, plan: planOf(log), prevLogs: findPrevLogs(logs, prev), meta: metaOf(log), skipRest: inSuperset(prev) }) }
   }
 
+  // 한쪽씩 하는 운동: 왼쪽을 끝내고 오른쪽으로(쉬지 않는다). 진동은 휴식 종료 진동 설정을 따른다.
+  const finishFirstSide = () => {
+    setSidePhase(1)
+    if (settings.restAlertVibrate) {
+      try {
+        navigator.vibrate?.(60)
+      } catch {
+        /* 진동을 못 쓰는 기기는 무시 */
+      }
+    }
+  }
+
   const completeSet = () => {
     if (!setForm || !currentLog || !currentStep) return
     unlockAudio() // 휴식 종료 소리를 낼 수 있게, 화면을 누른 이 시점에 오디오를 열어 둔다
+    setSidePhase(0)
     const endedAt = Date.now()
     const durationSeconds = Math.max(1, Math.round((endedAt - setStartAt) / 1000))
     const newSet = { reps: setForm.reps, weight: setForm.weight, durationSeconds, restBeforeSeconds: pendingRestBefore, startedAt: setStartAt, endedAt }
@@ -471,6 +581,7 @@ export default function WorkoutSession() {
 
     // 이 운동의 세트가 이걸로 끝인지 확인 (flatSteps에서 이 운동이 다시 나오는지)
     const isLastStepForLog = !flatSteps.slice(stepCursor + 1).some(s => s.logId === currentLog.id)
+    setLastDoneId(isLastStepForLog ? currentLog.id : null)
     if (isLastStepForLog) {
       const recentMax = getRecentMaxWeight(logs, currentLog.exercise)
       const fatigue = estimateExerciseFatigue(updatedForLog, recentMax)
@@ -503,6 +614,30 @@ export default function WorkoutSession() {
     }
   }
 
+  // ── 오늘만 세트 늘리기·줄이기 ─────────────────────────────────────────
+  // 지금 하는 운동의 세트 수를 오늘 세션에서만 ±1 한다(루틴·기록의 목표는 그대로). 줄이기는 이 세트를 포함해 2세트 이상 남았을 때만 된다(1세트 남았으면 "이 운동 건너뛰기"가 마치기).
+  // 세트 수가 바뀌면 진행 순서(flatSteps)가 달라지므로(수퍼세트는 번갈아 순서), 지금까지 한 세트 수 기준으로 지금 단계를 다시 찾는다.
+  const changeSetCount = d => {
+    if (!currentLog || reviewIdx !== null) return
+    const id = currentLog.id
+    const stored = logs.find(l => l.id === id)
+    const nextTotal = (currentLog.targetSets || 1) + d
+    if (!stored || nextTotal < doneSets.length + 1 || nextTotal > MAX_SETS) return
+    setSetDelta(prev => ({ ...prev, [id]: nextTotal - (stored.targetSets || 1) }))
+    const newSteps = buildFlatSteps(groupLogs.map(l => (l.id === id ? { ...l, targetSets: nextTotal } : l)))
+    const idx = newSteps.findIndex(s => s.round >= (performedByLog[s.logId]?.length || 0) && !isDeadStep(s))
+    if (idx === -1 || idx === stepCursor) return
+    setStepCursor(idx)
+    if (newSteps[idx].logId !== id) {
+      // 수퍼세트에서 순서가 바뀌어 다른 운동 차례가 된 경우: 그 운동의 목표로 입력칸을 다시 채운다
+      const l = groupLogs.find(g => g.id === newSteps[idx].logId)
+      setSetForm({ reps: l.targetReps || 0, weight: l.targetWeight || 0 })
+      setSetStartAt(Date.now())
+      setPendingRestBefore(null)
+      setSidePhase(0)
+    }
+  }
+
   // ── 다음에 할 단계 찾기 / 운동 건너뛰기 ─────────────────────────────
   // 아직 할 단계 중 다음 것: 건너뛴 운동, 또는 세트를 덜 하고 마친 운동의 남은 단계는 뛰어넘는다. 더 없으면 flatSteps.length.
   const isDeadStep = (s, extraDeadId) => s.logId === extraDeadId || skippedIds.has(s.logId) || !!logs.find(l => l.id === s.logId)?.isCompleted
@@ -523,6 +658,7 @@ export default function WorkoutSession() {
       ? `이 운동을 여기서 마칠까요?\n지금까지 한 ${sets.length}세트만 기록하고, 남은 세트는 건너뛰어요.`
       : `이 운동을 건너뛸까요?\n기록 없이 다음 운동으로 넘어가요. 오늘 기록에 '건너뜀'으로 남고, 기록 화면에서 다시 할 수 있어요.${skipSqlNote()}`
     if (!confirm(ask)) return
+    setLastDoneId(sets.length ? currentLog.id : null)
     if (sets.length) {
       const recentMax = getRecentMaxWeight(logs, currentLog.exercise)
       const fatigue = estimateExerciseFatigue(sets, recentMax)
@@ -553,6 +689,7 @@ export default function WorkoutSession() {
       setSetForm({ reps: log.targetReps || 0, weight })
       setSetStartAt(Date.now())
     }
+    setSidePhase(0)
     setSwapLog(null)
   }
 
@@ -741,6 +878,8 @@ export default function WorkoutSession() {
                         </div>
                         {/* 쓰는 근육(신체도) + 유튜브 자세 영상 검색 */}
                         <ExerciseGuide compact name={l.exercise} muscles={metaOf(l)?.muscles || []} />
+                        {renderNote(l)}
+                        {renderWarmup(l)}
                         {/* 지난번 수행 → 평가 → 위 목표가 나온 이유 */}
                         <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-m-caption leading-relaxed">
                           {last ? (
@@ -819,23 +958,56 @@ export default function WorkoutSession() {
             </div>
           )}
           <div className="text-2xl font-black text-gray-800 text-center mt-1">{currentLog.exercise}</div>
-          {sideOf(currentLog.exercise) && (
+          {sideOf(currentLog.exercise) && (reviewIdx === null ? (
+            <div className="mt-2 flex flex-col items-center gap-1">
+              <div className="flex items-center gap-2" role="group" aria-label="왼쪽·오른쪽 진행">
+                {['왼쪽', '오른쪽'].map((label, i) => (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={sidePhase === i}
+                    onClick={() => setSidePhase(i)}
+                    className={`min-h-[32px] px-4 rounded-full border text-m-body font-bold ${sidePhase === i ? 'bg-orange-50 border-orange-400 text-orange-700' : sidePhase > i ? 'bg-white border-gray-200 text-gray-400' : 'bg-white border-gray-200 text-gray-500'}`}
+                  >
+                    {sidePhase > i ? `${label} ✓` : label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-m-caption font-bold text-orange-700">한쪽씩 · 왼쪽·오른쪽을 모두 하면 1세트</span>
+            </div>
+          ) : (
             <div className="mt-1.5 text-center">
               <span className="inline-block px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 text-m-caption font-bold">한쪽씩 · 왼쪽·오른쪽을 모두 하면 1세트</span>
             </div>
-          )}
-          {doneSets.length === 0 && reviewIdx === null && (
-            <div className="mt-2 text-center">
-              <button
-                type="button"
-                onClick={() => setSwapLog(currentLog)}
-                className="inline-flex items-center gap-1 px-3 min-h-[32px] rounded-full bg-gray-100 text-gray-600 text-m-caption font-bold active:bg-gray-200"
-              >
-                <ArrowLeftRight className="w-3.5 h-3.5" />
-                운동 바꾸기
-              </button>
+          ))}
+          {reviewIdx === null && (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+              {doneSets.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSwapLog(currentLog)}
+                  className="inline-flex items-center gap-1 px-3 min-h-[32px] rounded-full bg-gray-100 text-gray-600 text-m-caption font-bold active:bg-gray-200"
+                >
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
+                  운동 바꾸기
+                </button>
+              )}
+              {(currentLog.targetSets || 1) - doneSets.length >= 2 && (
+                <button type="button" onClick={() => changeSetCount(-1)} className="inline-flex items-center gap-1 px-3 min-h-[32px] rounded-full bg-gray-100 text-gray-600 text-m-caption font-bold active:bg-gray-200">
+                  <Minus className="w-3.5 h-3.5" />
+                  세트 줄이기
+                </button>
+              )}
+              {(currentLog.targetSets || 1) < MAX_SETS && (
+                <button type="button" onClick={() => changeSetCount(1)} className="inline-flex items-center gap-1 px-3 min-h-[32px] rounded-full bg-gray-100 text-gray-600 text-m-caption font-bold active:bg-gray-200">
+                  <Plus className="w-3.5 h-3.5" />
+                  세트 추가
+                </button>
+              )}
             </div>
           )}
+          {doneSets.length === 0 && reviewIdx === null && renderNote(currentLog)}
+          {doneSets.length === 0 && reviewIdx === null && renderWarmup(currentLog)}
           <SetDots total={currentLog.targetSets || 1} done={doneSets.length} viewing={reviewIdx} locked={editing} onSelect={openFinishedSet} />
           {/* 끝낸 세트를 보고 있을 때만 안내가 나온다. 화면이 출렁이지 않게 자리는 항상 잡아 둔다 */}
           <div className={`h-5 mt-3 mb-4 text-center text-m-caption font-bold ${editing ? 'text-letusBlue' : 'text-gray-400'}`}>
@@ -851,6 +1023,7 @@ export default function WorkoutSession() {
               <div className="space-y-4">
                 <StepperCard label={sideOf(currentLog.exercise) ? '반복 (한쪽)' : '반복'} value={shown.reps} step={1} onChange={change('reps')} disabled={reviewing && !editing} />
                 <StepperCard label="무게" value={shown.weight} step={2.5} unit="kg" onChange={change('weight')} disabled={reviewing && !editing} />
+                {metaOf(currentLog)?.equipment === '바벨' && renderPlates(shown.weight)}
               </div>
             )
           })()}
@@ -858,11 +1031,16 @@ export default function WorkoutSession() {
           {reviewIdx === null ? (
             <>
               <button
-                onClick={completeSet}
+                onClick={sideOf(currentLog.exercise) && sidePhase === 0 ? finishFirstSide : completeSet}
                 className="w-full h-16 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8"
               >
-                세트 완료
+                {sideOf(currentLog.exercise) && sidePhase === 0 ? '왼쪽 끝 · 오른쪽으로' : '세트 완료'}
               </button>
+              {sideOf(currentLog.exercise) && sidePhase === 0 && (
+                <button type="button" onClick={completeSet} className="mx-auto mt-2 px-4 py-2 text-m-caption font-bold text-gray-500 underline underline-offset-2">
+                  좌우 안내 없이 바로 세트 완료
+                </button>
+              )}
               <button type="button" onClick={skipExercise} className="mx-auto mt-3 flex items-center gap-1.5 px-4 py-3 text-m-body font-bold text-gray-400 underline underline-offset-2">
                 <SkipForward className="w-4 h-4" />
                 이 운동 건너뛰기
@@ -907,6 +1085,13 @@ export default function WorkoutSession() {
           <button onClick={finishRest} className="text-letusBlue font-bold text-m-body underline underline-offset-2 mt-2 px-4 py-3">
             건너뛰기
           </button>
+          {ratingLog && (
+            <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white px-4 py-3 space-y-2">
+              <div className="text-m-caption font-bold text-gray-500">방금 한 {ratingLog.exercise}, 어땠어요?</div>
+              {renderFeel(ratingLog)}
+              <div className="text-m-caption text-gray-400">고르면 다음 목표를 정할 때 참고해요. 안 골라도 돼요.</div>
+            </div>
+          )}
           {restPreview && (
             <div className="text-m-caption text-gray-400 mt-6">
               {restPreview.isNewGroup
@@ -946,6 +1131,38 @@ export default function WorkoutSession() {
               <div className="text-m-caption font-bold text-orange-800">건너뛴 운동</div>
               <div className="text-m-body font-bold text-orange-700">{skippedLogs.map(l => l.exercise).join(' · ')}</div>
               <div className="text-m-caption text-orange-700/80 leading-relaxed">오늘 기록에 건너뜀으로 남아 있어요. 기록 화면에서 다시 할 수 있어요.</div>
+            </div>
+          )}
+
+          {todayRecords.length > 0 && (
+            <div className="w-full max-w-sm rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-left mt-2">
+              <div className="text-m-caption font-bold text-emerald-700">🏆 개인 기록 갱신</div>
+              {todayRecords.map(({ log, recs }) => (
+                <div key={log.id} className="mt-1">
+                  <div className="text-m-body font-bold text-gray-800">{log.exercise}</div>
+                  {recs.map(r => (
+                    <div key={r.kind} className="text-m-caption text-emerald-700">
+                      {recordLabel(r)}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <div className="mt-1 text-m-caption text-emerald-700/70">예상 1RM은 추정치예요.</div>
+            </div>
+          )}
+
+          {ratable.length > 0 && (
+            <div className="w-full max-w-sm mt-4 text-left space-y-2">
+              <div className="text-m-caption font-bold text-gray-500">
+                운동은 어땠어요? <span className="font-normal text-gray-400">· 고르면 다음 목표에 참고해요</span>
+              </div>
+              {ratable.map(l => (
+                <div key={l.id} className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 space-y-1.5">
+                  <div className="text-m-body font-bold text-gray-700">{l.exercise}</div>
+                  {renderFeel(l)}
+                </div>
+              ))}
+              {feelSupported === false && <div className="text-m-caption text-orange-600 leading-relaxed">※ 이 데이터베이스에는 체감 난이도 칼럼이 없어서 앱을 다시 열면 사라져요. supabase/log_feel.sql 실행이 필요해요.</div>}
             </div>
           )}
 

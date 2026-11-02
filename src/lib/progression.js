@@ -9,9 +9,16 @@
 //   1. 계획한 무게보다 가볍게 했다           → 유지 (그 무게로는 평가하지 않는다)
 //   2. 계획한 세트를 다 못 했다              → 유지
 //   3. 어떤 세트가 목표 횟수에 못 미쳤다      → 유지. 같은 무게에서 3번 연속 못 채우면 무게 낮추기(10%)
-//   4. 피로도 5(매우 힘듦)                   → 유지
+//   4. 피로도 5(매우 힘듦) 또는 체감 "힘들었어요" → 유지
 //   5. 목표는 채웠지만 수행 품질이 나쁘다      → 유지 (아래 "수행 품질")
 //   6. 그 외(목표 달성 + 품질 좋음)           → 무게 올리기. 맨몸(무게 0)은 횟수를 +1
+//
+// 체감 난이도(log.feel, 운동을 끝낸 뒤 사용자가 한 번 눌러 고른다 — 고르지 않으면 위 규칙 그대로):
+//   hard(힘들었어요) → 목표를 다 채우고 수행이 좋아도 무게를 올리지 않고 유지(④).
+//   easy(쉬웠어요)   → 수행 품질 중 "휴식을 길게 썼다·속도가 느려졌다"는 판단을 풀어 준다(그건 쉬웠다는 말과 안 맞을 수 있어서).
+//                      "세트가 갈수록 횟수가 크게 줄었다"는 쉬웠다는 말과 모순이라 그대로 유지로 본다. 목표를 못 채웠으면 easy여도 유지(③).
+//   ok(적당해요)     → 규칙 그대로.
+//   easy가 무게를 더 많이 올리게 하지는 않는다(증량 폭은 그대로) — 한 번의 주관 값으로 큰 점프를 하지 않기 위해서.
 //
 // 수행 품질(운동 진행 화면으로 기록한 세트의 측정값을 쓴다. 값이 없으면 그 항목은 판단에서 뺀다):
 //   · 세트가 갈수록 횟수가 크게 줄었는가   — 첫 세트보다 마지막 세트가 3회 이상 적으면 "무너짐"
@@ -33,6 +40,9 @@ const TEMPO_SLOW_RATIO = 1.4
 const TEMPO_SLOW_MIN_EXTRA = 1 // 반복당 초
 
 const round1 = n => Math.round(n * 10) / 10
+
+export const FEEL_LABELS = { easy: '쉬웠어요', ok: '적당해요', hard: '힘들었어요' }
+export const FEEL_KEYS = Object.keys(FEEL_LABELS)
 
 export const VERDICT_LABELS = {
   'weight-up': '무게 올리기',
@@ -95,7 +105,8 @@ function actualRests(sets) {
 const perRep = s => (s?.durationSeconds && s?.reps ? s.durationSeconds / s.reps : null)
 
 // 목표 횟수를 채운 세션의 수행 품질: 문제가 있으면 그 내용을 문장 목록으로 돌려준다(없으면 빈 배열)
-export function qualityProblems(sets, plannedRestSeconds, { skipRest = false } = {}) {
+//   ignoreSoft: 휴식·속도 판단을 뺀다(체감이 "쉬웠어요"일 때). 세트 무너짐(횟수 급감)은 그대로 본다.
+export function qualityProblems(sets, plannedRestSeconds, { skipRest = false, ignoreSoft = false } = {}) {
   const problems = []
   const first = sets[0]
   const last = sets[sets.length - 1]
@@ -105,9 +116,9 @@ export function qualityProblems(sets, plannedRestSeconds, { skipRest = false } =
 
     const t0 = perRep(first)
     const tn = perRep(last)
-    if (t0 && tn && tn >= t0 * TEMPO_SLOW_RATIO && tn - t0 >= TEMPO_SLOW_MIN_EXTRA) problems.push('마지막 세트로 갈수록 속도가 크게 느려졌어요')
+    if (!ignoreSoft && t0 && tn && tn >= t0 * TEMPO_SLOW_RATIO && tn - t0 >= TEMPO_SLOW_MIN_EXTRA) problems.push('마지막 세트로 갈수록 속도가 크게 느려졌어요')
   }
-  if (plannedRestSeconds > 0 && !skipRest) {
+  if (plannedRestSeconds > 0 && !skipRest && !ignoreSoft) {
     const rests = actualRests(sets)
     if (rests.length) {
       const avg = rests.reduce((a, b) => a + b, 0) / rests.length
@@ -164,14 +175,20 @@ export function evaluateSession({ log, plan, prevLogs = [], meta, skipRest = fal
     return hold(`목표 ${target}회에 못 미친 세트가 있어요${streak > 1 ? ` (${streak}번 연속)` : ''}. 같은 목표로 다시 도전해요.${warn}`)
   }
 
+  if (log.feel === 'hard') return hold('목표는 채웠지만 "힘들었어요"라고 골라서 목표를 그대로 두고 한 번 더 익혀요.')
   if (fatigue >= FATIGUE_HARD) return hold('매우 힘들었어요(피로도 5). 목표를 그대로 두고 회복해요.')
 
-  const problems = qualityProblems(sets, Number(log.restSeconds) || 0, { skipRest })
+  const easy = log.feel === 'easy'
+  const problems = qualityProblems(sets, Number(log.restSeconds) || 0, { skipRest, ignoreSoft: easy })
   if (problems.length) return hold(`목표는 채웠지만 ${problems.join(', ')}. 아직 올리기엔 여유가 부족해 보여서 그대로 유지해요.`)
 
-  if (bodyweight) return make('reps-up', `모든 세트에서 ${target}회 이상 해냈고 수행도 안정적이었어요. 횟수를 늘려요.`, { sets: plannedSets, reps: minReps + 1, weight: 0 })
+  if (bodyweight) {
+    const why = easy ? `모든 세트에서 ${target}회 이상 해냈고 "쉬웠어요"라고 골랐어요.` : `모든 세트에서 ${target}회 이상 해냈고 수행도 안정적이었어요.`
+    return make('reps-up', `${why} 횟수를 늘려요.`, { sets: plannedSets, reps: minReps + 1, weight: 0 })
+  }
 
-  return make('weight-up', `모든 세트에서 목표 ${target}회를 채웠고 휴식·속도도 안정적이었어요. 무게를 올려요.`, { sets: plannedSets, reps: target, weight: ww + weightIncrement(meta) })
+  const why = easy ? `모든 세트에서 목표 ${target}회를 채웠고 "쉬웠어요"라고 골랐어요.` : `모든 세트에서 목표 ${target}회를 채웠고 휴식·속도도 안정적이었어요.`
+  return make('weight-up', `${why} 무게를 올려요.`, { sets: plannedSets, reps: target, weight: ww + weightIncrement(meta) })
 }
 
 // 평가 결과를 루틴의 운동 항목에 반영한다. 반복(reps)은 사용자가 정한 값이라 건드리지 않고, 맨몸 운동의 지금 목표 횟수만 progressReps에 둔다.
