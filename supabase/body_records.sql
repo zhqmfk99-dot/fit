@@ -1,7 +1,7 @@
--- 신체 기록 테이블. Supabase SQL Editor에서 통째로 실행하세요. (profile_fields.sql 실행 후 한 번만)
+-- 신체 기록 테이블. Supabase SQL Editor에서 통째로 실행하세요. (profile_fields.sql 실행 후) 여러 번 실행해도 안전합니다.
 -- 날짜당 한 건: 같은 날짜에 다시 저장하면 그 날짜의 기록을 덮어쓴다.
 
-create table public.body_records (
+create table if not exists public.body_records (
   id                  uuid primary key default gen_random_uuid(),
   user_id             uuid not null default auth.uid() references auth.users(id) on delete cascade,
   date                date not null,
@@ -20,10 +20,11 @@ create table public.body_records (
   unique (user_id, date)
 );
 
-create index on public.body_records (user_id, date);
+create index if not exists body_records_user_id_date_idx on public.body_records (user_id, date);
 
 alter table public.body_records enable row level security;
 
+drop policy if exists "own rows" on public.body_records;
 create policy "own rows" on public.body_records
   for all to authenticated
   using (user_id = (select auth.uid()))

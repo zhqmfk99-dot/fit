@@ -1,5 +1,5 @@
 -- "내 정보" 모달과 회원 탈퇴를 위한 추가 설정.
--- Supabase SQL Editor에서 통째로 실행하세요. (auth_profiles.sql 실행 후 한 번만)
+-- Supabase SQL Editor에서 통째로 실행하세요. (auth_profiles.sql 실행 후) 여러 번 실행해도 안전합니다.
 
 -- 1) 프로필 항목 추가 (BMI는 저장하지 않고 화면에서 키/몸무게로 계산)
 alter table public.profiles
@@ -9,6 +9,7 @@ alter table public.profiles
   add column if not exists weight_kg numeric check (weight_kg between 10 and 500);
 
 -- 2) 본인 프로필의 이름/성별/나이/키/몸무게만 수정 가능. (id, email은 수정 불가)
+drop policy if exists "update own profile" on public.profiles;
 create policy "update own profile" on public.profiles
   for update to authenticated
   using (id = (select auth.uid()))

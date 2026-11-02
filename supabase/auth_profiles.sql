@@ -1,5 +1,5 @@
 -- 이름 기반 아이디 찾기 / 비밀번호 찾기를 위한 프로필 테이블과 함수.
--- Supabase SQL Editor에서 통째로 실행하세요. (schema.sql 실행 후 추가로 한 번만)
+-- Supabase SQL Editor에서 통째로 실행하세요. (schema.sql 실행 후) 여러 번 실행해도 안전합니다.
 
 -- 1) 프로필: 가입 시 입력한 이름과 이메일(아이디)
 create table if not exists public.profiles (
@@ -12,6 +12,7 @@ create table if not exists public.profiles (
 alter table public.profiles enable row level security;
 
 -- 로그인한 사용자는 본인 프로필만 조회 가능. (이름 검색은 아래 함수로만 가능)
+drop policy if exists "own profile" on public.profiles;
 create policy "own profile" on public.profiles
   for select to authenticated
   using (id = (select auth.uid()));
