@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { TRAINABLE_MUSCLES, MUSCLE_LABELS, EQUIPMENT_OPTIONS, MOVEMENT_PATTERNS, EXERCISE_TYPES } from '../../lib/muscleMap.js'
+import { NOTE_MAX, cleanNote } from '../../lib/exerciseNote.js'
 
 const ACCENT = 'bg-letusOrange'
 
 export default function ExerciseFormModal({ row, existingNames = [], onClose, onSave }) {
-  const { unilateralSupported } = useWorkoutLogs()
+  const { unilateralSupported, noteSupported } = useWorkoutLogs()
   const isEdit = !!row
 
   const [name, setName] = useState(row?.name || '')
@@ -14,6 +15,7 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
   const [movementPattern, setMovementPattern] = useState(row?.movementPattern || '')
   const [exerciseType, setExerciseType] = useState(row?.exerciseType || '')
   const [unilateral, setUnilateral] = useState(!!row?.unilateral) // 한쪽씩 하는 운동: 횟수를 한쪽 기준으로 적고, 볼륨·칼로리는 양쪽으로 센다
+  const [note, setNote] = useState(row?.note || '') // 운동 메모(기구 세팅·자세 포인트)
   const [tags, setTags] = useState(row?.tags || [])
   const [tagInput, setTagInput] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
@@ -56,6 +58,7 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
       movementPattern: movementPattern || null,
       exerciseType: exerciseType || null,
       unilateral,
+      note: cleanNote(note),
       tags: finalTags,
     })
     onClose()
@@ -201,6 +204,26 @@ export default function ExerciseFormModal({ row, existingNames = [], onClose, on
             </span>
           </label>
 
+          <div className="flex flex-col gap-1.5">
+            <label className="text-ui-body font-bold text-gray-700">
+              메모 <span className="text-ui-caption font-normal text-gray-400">(선택 · 기구 세팅, 자세 포인트)</span>
+            </label>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              maxLength={NOTE_MAX}
+              rows={3}
+              placeholder="예: 벤치 높이 3, 시트 4 · 어깨뼈 모으고 내리기"
+              className="border border-gray-300 rounded-[4px] px-3.5 py-2 text-ui-body focus:outline-none focus:border-letusOrange transition-all bg-white resize-none"
+            />
+            <div className="flex justify-between text-ui-caption text-gray-400">
+              <span>운동 시작 화면에 보여요</span>
+              <span>
+                {note.length}/{NOTE_MAX}
+              </span>
+            </div>
+            {!noteSupported && <span className="text-ui-caption font-bold text-red-500 leading-relaxed">메모를 저장하려면 supabase/exercise_note.sql을 먼저 실행해 주세요.</span>}
+          </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-ui-body font-bold text-gray-700">
               태그 <span className="text-ui-caption font-normal text-gray-400">(별칭·다른 이름, Enter로 추가)</span>

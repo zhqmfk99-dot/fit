@@ -119,7 +119,7 @@ export function useWorkoutLog() {
     setLogs(prev =>
       prev.map(l => {
         if (l.id !== id) return l
-        if (l.isCompleted) return { ...l, isCompleted: false }
+        if (l.isCompleted) return { ...l, isCompleted: false, feel: null } // 완료를 취소하면 체감 난이도도 지운다
         // 세션을 거치지 않고 바로 완료 처리하는 경우 — 목표치를 실제 기록으로 채우고 피로도를 계산한다
         const performedSets = l.performedSets?.length
           ? l.performedSets

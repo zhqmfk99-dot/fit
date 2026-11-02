@@ -2,7 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { supabase } from '../lib/supabase.js'
 import { generateScheduledLogs } from '../lib/scheduleGenerator.js'
 import { applyKcal } from '../lib/calories.js'
-import { createSyncer } from '../lib/persistedSync.js'
+import { createSyncer, applyPending, diffOf, isEmptyDiff } from '../lib/persistedSync.js'
+import { createPendingStore } from '../lib/pendingStore.js'
+import { cleanNote } from '../lib/exerciseNote.js'
 import { unilateralNames } from '../lib/workoutMetrics.js'
 import { useAuth } from './AuthContext.jsx'
 import { useSettings } from './SettingsContext.jsx'
@@ -19,6 +21,7 @@ const exerciseFromRow = r => ({
   exerciseType: r.exercise_type ?? null,
   tags: r.tags ?? [],
   unilateral: !!r.unilateral, // 한쪽씩 하는 운동(횟수를 한쪽 기준으로 적음) — 볼륨·칼로리를 양쪽(×2)으로 센다
+  note: r.note ?? '', // 운동 메모(기구 세팅·자세 포인트) — 운동 시작 화면·상세에 보여 준다 (lib/exerciseNote.js)
 })
 const exerciseToRow = e => ({
   id: e.id,
@@ -29,6 +32,7 @@ const exerciseToRow = e => ({
   exercise_type: e.exerciseType ?? null,
   tags: e.tags ?? [],
   unilateral: !!e.unilateral,
+  note: cleanNote(e.note) || null,
 })
 
 const routineFromRow = r => ({ id: r.id, name: r.name, isActive: r.is_active, repeatDays: r.repeat_days ?? [], exercises: r.exercises ?? [] })
@@ -49,6 +53,7 @@ const logFromRow = r => ({
   isCompleted: r.is_completed,
   kcal: r.kcal == null ? null : Number(r.kcal), // 소모 칼로리(추정) — 완료·수정 시 앱이 계산해서 저장 (lib/calories.js)
   skipped: !!r.skipped, // 하지 않기로 한(건너뛴) 운동 — 완료도 예정도 아닌 상태 (lib/logStatus.js)
+  feel: r.feel ?? null, // 체감 난이도 easy/ok/hard — 운동을 끝낸 뒤 사용자가 고른다 (lib/progression.js)
 })
 const logToRow = l => ({
   id: l.id,
@@ -65,6 +70,7 @@ const logToRow = l => ({
   is_completed: !!l.isCompleted,
   kcal: l.kcal ?? null,
   skipped: !!l.skipped,
+  feel: l.feel ?? null,
 })
 
 const num = v => (v == null ? null : Number(v))
@@ -104,12 +110,12 @@ const bodyRecordToRow = b => ({
 // transform(next, prev): 저장 직전에 값을 다듬는 선택 함수 (운동 기록에 소모 칼로리를 채울 때 쓴다)
 // 저장은 lib/persistedSync.js: "마지막으로 저장에 성공한 상태 → 지금 상태"의 차이를 올리므로, 저장이 실패해도 다음 시도(run)에서 다시 올라간다.
 // 반환: [상태, setter, replace(서버에서 읽은 값으로 덮어쓰기), retry(실패한 저장을 다시 시도)]
-function usePersistedState(table, toRow, queueRef, onError, onSaved, transform) {
+function usePersistedState(table, toRow, queueRef, onError, onSaved, transform, store) {
   const [state, setState] = useState([])
   const ref = useRef([])
   const syncerRef = useRef(null)
   if (!syncerRef.current) {
-    syncerRef.current = createSyncer({ client: supabase, table, toRow, getTarget: () => ref.current, queue: queueRef, onError, onSaved })
+    syncerRef.current = createSyncer({ client: supabase, table, toRow, getTarget: () => ref.current, queue: queueRef, onError, onSaved, store })
   }
 
   const set = useCallback(
@@ -138,6 +144,11 @@ function usePersistedState(table, toRow, queueRef, onError, onSaved, transform) 
 export function WorkoutLogsProvider({ children }) {
   const queueRef = useRef(Promise.resolve())
   const { user } = useAuth()
+  // 저장 못 한 변경을 이 기기(IndexedDB)에 보관 — 앱이 종료돼도 다음에 열 때 다시 올린다(lib/pendingStore.js). 쓸 수 없으면 보관 없이 동작.
+  const pendingStore = useRef(createPendingStore()).current
+  const userIdRef = useRef(null)
+  userIdRef.current = user?.id ?? null
+  const storeRef = useRef({ save: (table, pending) => pendingStore.save(userIdRef.current, table, pending) })
   const { settings } = useSettings() // 소모 칼로리 보정 계수
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -200,7 +211,7 @@ export function WorkoutLogsProvider({ children }) {
     const onVisible = () => document.visibilityState === 'visible' && failedRef.current.size && retryNow()
     // 저장 못 한 변경이 있는 채로 페이지를 닫으면 그 변경은 사라진다 — 브라우저 확인창으로 한 번 알린다(지원하는 환경에서만)
     const onBeforeUnload = e => {
-      if (!failedRef.current.size) return
+      if (!failedRef.current.size || pendingStore.available) return // 기기에 보관해 두므로 보관소를 쓸 수 있으면 확인창은 띄우지 않는다
       e.preventDefault()
       e.returnValue = ''
     }
@@ -213,7 +224,7 @@ export function WorkoutLogsProvider({ children }) {
       window.removeEventListener('beforeunload', onBeforeUnload)
       clearTimeout(retryRef.current.timer)
     }
-  }, [retryNow])
+  }, [retryNow, pendingStore])
   // 칼로리 계산에 쓰는 체중 출처(신체 기록, 내 정보 체중). setLogs가 저장 직전에 최신 값을 읽도록 ref에 둔다.
   const weightSourceRef = useRef({ bodyRecords: [], profileWeightKg: null })
   // DB에 kcal 칼럼이 아직 없으면(SQL 미실행) 칼로리를 채우지도 저장하지도 않아서 운동 기록 저장이 실패하지 않게 한다.
@@ -222,25 +233,33 @@ export function WorkoutLogsProvider({ children }) {
   // workout_logs.skipped 칼럼이 없으면(SQL 미실행) 그 값도 저장하지 않아서 운동 기록 저장이 실패하지 않게 한다. 이때 건너뜀은 앱을 다시 열면 사라진다(화면에 안내).
   const skippedColumnRef = useRef(true)
   const [skippedSupported, setSkippedSupported] = useState(true)
+  // workout_logs.feel 칼럼도 같은 방식 — 없으면 체감 난이도를 저장하지 않고(앱을 다시 열면 사라짐) 기록 저장은 실패하지 않는다.
+  const feelColumnRef = useRef(true)
+  const [feelSupported, setFeelSupported] = useState(true)
   const transformLogs = useCallback((next, prev) => (kcalColumnRef.current ? applyKcal(next, prev, weightSourceRef.current) : next), [])
   const toLogRow = useCallback(l => {
     const row = logToRow(l)
     if (!kcalColumnRef.current) delete row.kcal
     if (!skippedColumnRef.current) delete row.skipped
+    if (!feelColumnRef.current) delete row.feel
     return row
   }, [])
   // exercises.unilateral 칼럼이 아직 없으면(SQL 미실행) 그 값은 저장하지 않아서 운동 저장이 실패하지 않게 한다. 이때 표시는 유지되지 않는다.
   const [unilateralSupported, setUnilateralSupported] = useState(true)
   const unilateralColumnRef = useRef(true)
+  // exercises.note 칼럼도 같은 방식 — 없으면 메모를 저장하지 않고(유지되지 않음) 운동 저장은 실패하지 않는다. 폼에 안내가 뜬다.
+  const [noteSupported, setNoteSupported] = useState(true)
+  const noteColumnRef = useRef(true)
   const toExerciseRow = useCallback(e => {
     const row = exerciseToRow(e)
     if (!unilateralColumnRef.current) delete row.unilateral
+    if (!noteColumnRef.current) delete row.note
     return row
   }, [])
-  const [logs, setLogs, replaceLogs, retryLogs] = usePersistedState('workout_logs', toLogRow, queueRef, handleSaveError, handleSaved, transformLogs)
-  const [routines, setRoutines, replaceRoutines, retryRoutines] = usePersistedState('routines', routineToRow, queueRef, handleSaveError, handleSaved)
-  const [exercises, setExercises, replaceExercises, retryExercises] = usePersistedState('exercises', toExerciseRow, queueRef, handleSaveError, handleSaved)
-  const [bodyRecords, setBodyRecords, replaceBodyRecords, retryBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleSaveError, handleSaved)
+  const [logs, setLogs, replaceLogs, retryLogs] = usePersistedState('workout_logs', toLogRow, queueRef, handleSaveError, handleSaved, transformLogs, storeRef.current)
+  const [routines, setRoutines, replaceRoutines, retryRoutines] = usePersistedState('routines', routineToRow, queueRef, handleSaveError, handleSaved, undefined, storeRef.current)
+  const [exercises, setExercises, replaceExercises, retryExercises] = usePersistedState('exercises', toExerciseRow, queueRef, handleSaveError, handleSaved, undefined, storeRef.current)
+  const [bodyRecords, setBodyRecords, replaceBodyRecords, retryBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleSaveError, handleSaved, undefined, storeRef.current)
   runnersRef.current = { workout_logs: retryLogs, routines: retryRoutines, exercises: retryExercises, body_records: retryBodyRecords }
   weightSourceRef.current = { bodyRecords, profileWeightKg, calibration: settings.calorieCalibration, uni: unilateralNames(exercises) }
 
@@ -254,6 +273,10 @@ export function WorkoutLogsProvider({ children }) {
         supabase.from('body_records').select('*').order('date', { ascending: false }),
       ])
       if (cancelled) return
+      // 이전에 저장하지 못하고 앱이 종료된 변경이 기기에 보관돼 있으면 읽어 온다(아래에서 서버 값 위에 얹어 다시 올린다)
+      const uid = userIdRef.current
+      const [pEx, pRo, pLo, pBo] = await Promise.all(['exercises', 'routines', 'workout_logs', 'body_records'].map(t => pendingStore.load(uid, t)))
+      if (cancelled) return
       // 신체 기록은 부가 기능이라 조회에 실패해도(테이블 미생성 등) 나머지 데이터는 정상 로드한다
       if (bo.error) console.warn('body_records 조회 실패:', bo.error.message)
       const firstError = ex.error || ro.error || lo.error
@@ -265,11 +288,20 @@ export function WorkoutLogsProvider({ children }) {
       const loadedRoutines = ro.data.map(routineFromRow)
       const loadedLogs = lo.data.map(logFromRow)
       const loadedExercises = ex.data.map(exerciseFromRow)
+      const mergedRoutines = applyPending(loadedRoutines, pRo)
+      const mergedLogs = applyPending(loadedLogs, pLo)
+      const mergedExercises = applyPending(loadedExercises, pEx)
       // unilateral 칼럼 유무 확인: 행이 있는데 키가 없으면 칼럼이 아직 없는 것
       if (ex.data.length && !('unilateral' in ex.data[0])) {
         unilateralColumnRef.current = false
         setUnilateralSupported(false)
         console.warn('exercises.unilateral 칼럼이 없어 한쪽씩 표시를 저장하지 않습니다. supabase/unilateral.sql을 실행하세요.')
+      }
+      // note 칼럼 유무 확인(같은 방식)
+      if (ex.data.length && !('note' in ex.data[0])) {
+        noteColumnRef.current = false
+        setNoteSupported(false)
+        console.warn('exercises.note 칼럼이 없어 운동 메모를 저장하지 않습니다. supabase/exercise_note.sql을 실행하세요.')
       }
       replaceExercises(loadedExercises)
       replaceRoutines(loadedRoutines)
@@ -285,26 +317,33 @@ export function WorkoutLogsProvider({ children }) {
         setSkippedSupported(false)
         console.warn('workout_logs.skipped 칼럼이 없어 건너뜀 표시를 저장하지 않습니다. supabase/log_skipped.sql을 실행하세요.')
       }
+      // feel 칼럼 유무 확인(같은 방식)
+      if (lo.data.length && !('feel' in lo.data[0])) {
+        feelColumnRef.current = false
+        setFeelSupported(false)
+        console.warn('workout_logs.feel 칼럼이 없어 체감 난이도를 저장하지 않습니다. supabase/log_feel.sql을 실행하세요.')
+      }
       replaceLogs(loadedLogs)
+      const mergedBody = applyPending(loadedBodyRecords, pBo)
       replaceBodyRecords(loadedBodyRecords)
-      setLoading(false)
       // 이 시점의 렌더 전이라 ref가 아직 비어 있으므로, 칼로리 채우기에 쓸 체중 출처를 직접 넣어 둔다
-      weightSourceRef.current = { ...weightSourceRef.current, bodyRecords: loadedBodyRecords, uni: unilateralNames(loadedExercises) }
+      weightSourceRef.current = { ...weightSourceRef.current, bodyRecords: mergedBody, uni: unilateralNames(mergedExercises) }
+      // 보관돼 있던 변경을 서버 값 위에 얹는다 — setX가 \
       // 앞으로 2주치 "예정" 기록을 채워 넣고(이미 있으면 건너뜀), 칼로리가 비어 있는 완료 기록(이 기능 이전 기록)은 체중을 알면 채운다
-      const scheduled = generateScheduledLogs(loadedRoutines, loadedLogs)
+      const scheduled = generateScheduledLogs(mergedRoutines, mergedLogs)
       setLogs(prev => [...scheduled, ...prev])
     })()
     return () => {
       cancelled = true
     }
-  }, [replaceExercises, replaceRoutines, replaceLogs, replaceBodyRecords, setLogs])
+  }, [replaceExercises, replaceRoutines, replaceLogs, replaceBodyRecords, setLogs, setRoutines, setExercises, setBodyRecords, pendingStore])
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-sm font-bold text-gray-400">불러오는 중...</div>
   }
 
   return (
-    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported, skippedSupported }}>
+    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported, noteSupported, skippedSupported, feelSupported }}>
       {error && (
         <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
           <span>{error}</span>
@@ -313,7 +352,7 @@ export function WorkoutLogsProvider({ children }) {
       )}
       {saveFailed && (
         <div role="alert" className={`fixed inset-x-0 z-[200] bg-orange-500 text-white text-xs font-bold px-4 py-2 flex items-center justify-between gap-3 ${error ? 'top-8' : 'top-0'}`}>
-          <span>일부 기록을 저장하지 못했어요. 연결이 돌아오면 자동으로 다시 시도해요. (그 전에 앱을 닫으면 사라질 수 있어요)</span>
+          <span>일부 기록을 저장하지 못했어요. 연결이 돌아오면 자동으로 다시 시도해요. {pendingStore.available ? '(앱을 닫아도 이 기기에 보관했다가 다음에 열 때 다시 올려요)' : '(그 전에 앱을 닫으면 사라질 수 있어요)'}</span>
           <button type="button" onClick={retryNow} className="shrink-0 px-2.5 py-1 rounded bg-white/20 active:bg-white/30">
             지금 다시 시도
           </button>

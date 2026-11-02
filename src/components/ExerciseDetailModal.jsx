@@ -2,6 +2,7 @@ import { useBackHandler } from '../context/BackNavigationContext.jsx'
 import { MUSCLE_LABELS } from '../lib/muscleMap.js'
 import { equipmentBadgeClass } from '../lib/equipmentStyle.js'
 import ExerciseGuide from './mobile/ExerciseGuide.jsx'
+import ExerciseHistory from './ExerciseHistory.jsx'
 
 export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) {
   useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
@@ -45,6 +46,11 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
           </div>
 
           <div>
+            <label className="block text-m-body font-bold text-gray-600 mb-1.5">내 기록</label>
+            <ExerciseHistory name={row.name} />
+          </div>
+
+          <div>
             <label className="block text-m-body font-bold text-gray-600 mb-1.5">사용장비</label>
             <span className={`px-3 py-1.5 rounded-full text-m-body font-bold ${row.equipment ? equipmentBadgeClass(row.equipment) : 'bg-gray-100 text-gray-500'}`}>{row.equipment || '-'}</span>
           </div>
@@ -65,6 +71,13 @@ export default function ExerciseDetailModal({ row, onClose, onEdit, onDelete }) 
               <label className="block text-m-body font-bold text-gray-600 mb-1.5">기록 방식</label>
               <span className="px-3 py-1.5 rounded-full text-m-body font-bold bg-orange-50 text-orange-700">한쪽씩 · 횟수는 한쪽 기준</span>
               <p className="mt-1.5 text-m-caption text-gray-400 leading-relaxed">볼륨·칼로리는 양쪽(×2)으로 계산해요.</p>
+            </div>
+          )}
+
+          {row.note && (
+            <div>
+              <label className="block text-m-body font-bold text-gray-600 mb-1.5">메모</label>
+              <p className="text-m-body text-gray-700 whitespace-pre-wrap leading-relaxed bg-white border border-gray-200 rounded-lg px-3 py-2">{row.note}</p>
             </div>
           )}
 
