@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { X, Check, Link2, Flame, PersonStanding } from 'lucide-react'
+import { X, Check, Link2, Flame, PersonStanding, ArrowLeftRight, SkipForward, Flag } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useBackHandler } from '../../context/BackNavigationContext.jsx'
 import { notifyRestEnd, unlockAudio } from '../../lib/restAlert.js'
 import ExerciseGuide from '../../components/mobile/ExerciseGuide.jsx'
 import StretchSheet from '../../components/mobile/StretchSheet.jsx'
+import SwapExerciseSheet from '../../components/mobile/SwapExerciseSheet.jsx'
+import { sessionExcludeNames, routineExerciseNames, swapLogs, swapRoutine } from '../../lib/exerciseSwap.js'
+import { lastWeightFor } from '../../lib/aiRoutine.js'
+import { isSkipped } from '../../lib/logStatus.js'
 import { stretchPlan, planMinutes } from '../../lib/stretchGuide.js'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../../lib/workoutMetrics.js'
 import { useDayKcal } from '../../hooks/useDayKcal.js'
@@ -139,7 +143,7 @@ export default function WorkoutSession() {
   const [searchParams] = useSearchParams()
   const routineId = searchParams.get('routineId')
   const date = searchParams.get('date')
-  const { logs, setLogs, routines, setRoutines, exercises: exerciseCatalog } = useWorkoutLogs()
+  const { logs, setLogs, routines, setRoutines, exercises: exerciseCatalog, skippedSupported } = useWorkoutLogs()
   const { settings } = useSettings() // 기본 휴식 시간·화면 꺼짐 방지·점진 과부하 자동 적용
   // 뒤로가기(제스처)는 종료 버튼(X)과 같게 동작한다: 세트·휴식 중이면 확인창, 그 외에는 바로 기록으로.
   // handleExit은 아래(조기 return 뒤)에서 정의되므로 ref로 연결한다. 세션을 못 찾은 화면에서는 false(처리 안 함) → 상위 화면으로 이동.
@@ -161,9 +165,13 @@ export default function WorkoutSession() {
   const allSessionLogs = logs.filter(l => l.routineId === routineId && l.date === date)
   const totalCount = allSessionLogs.length
   const doneCount = allSessionLogs.filter(l => l.isCompleted).length
+  // 건너뛴 운동(한 세트도 안 하고 넘긴 것)의 기록 id. 기록의 skipped 표시로 저장돼서(lib/logStatus.js) 앱을 다시 열어도 유지되고,
+  // 오늘 기록에는 "건너뜀"으로 남는다(미완료지만 "아직 할 운동"으로 세지 않는다).
+  const skippedIds = new Set(allSessionLogs.filter(isSkipped).map(l => l.id))
+  const [swapLog, setSwapLog] = useState(null) // 운동 바꾸기 시트가 열려 있으면 바꿀 기록
 
   // 그룹(수퍼세트는 여러 운동이 한 그룹)이 모두 끝났는지 — 목록에서 선택을 막고, 다음에 할 그룹을 찾는 데 쓴다
-  const isGroupDone = i => groups[i].every(id => logs.find(l => l.id === id)?.isCompleted)
+  const isGroupDone = i => groups[i].every(id => skippedIds.has(id) || logs.find(l => l.id === id)?.isCompleted)
   // 현재 그룹 다음에 할 그룹: 뒤쪽을 먼저 보고, 없으면 앞쪽에 남은 것. 남은 게 없으면 -1.
   const findNextPendingGroup = from => {
     for (let k = 1; k < groups.length; k++) {
@@ -174,7 +182,7 @@ export default function WorkoutSession() {
   }
 
   // 처음 시작할 그룹: 안 끝난 첫 그룹 (전부 끝났으면 0)
-  const [groupIdx, setGroupIdx] = useState(() => Math.max(0, groups.findIndex((_, i) => groups[i].some(id => !initiallyDone.has(id)))))
+  const [groupIdx, setGroupIdx] = useState(() => Math.max(0, groups.findIndex((_, i) => groups[i].some(id => !initiallyDone.has(id) && !skippedIds.has(id)))))
   const hasPendingGroup = groups.some((_, i) => !isGroupDone(i))
   const currentGroupIds = (groups[groupIdx] || []).filter(id => !initiallyDone.has(id))
   const groupLogs = currentGroupIds.map(id => logs.find(l => l.id === id)).filter(Boolean)
@@ -409,6 +417,7 @@ export default function WorkoutSession() {
   const musclesOf = ids => ids.map(id => logs.find(l => l.id === id)).filter(Boolean).flatMap(l => metaOf(l)?.muscles || [])
   const warmupMuscles = musclesOf(sessionIds.filter(id => !initiallyDone.has(id)))
   const cooldownMuscles = musclesOf(sessionIds)
+  const skippedLogs = [...skippedIds].map(id => logs.find(l => l.id === id)).filter(Boolean) // 완료 화면에 알려 줄 건너뛴 운동
   // 수퍼세트에 든 운동인가(자기 자신이 "다음과 묶기"이거나 바로 앞 운동이 묶기) — 세트 사이 간격에 짝 운동 시간이 끼므로 휴식 판단에서 뺀다
   const inSuperset = log => {
     const day = logs.filter(l => l.routineId === log.routineId && l.date === log.date)
@@ -470,7 +479,7 @@ export default function WorkoutSession() {
     }
 
     const restSeconds = currentLog.restSeconds || settings.defaultRestSeconds
-    const nextStepIdx = stepCursor + 1
+    const nextStepIdx = findNextLiveStep(stepCursor + 1) // 건너뛴·이미 마친 운동의 단계는 뛰어넘는다
 
     if (nextStepIdx >= flatSteps.length) {
       // 그룹(수퍼세트 포함) 전체 종료
@@ -492,6 +501,77 @@ export default function WorkoutSession() {
       // 같은 라운드 안에서 다음 운동으로 — 수퍼세트는 휴식 없이 바로 이어간다
       startStep(nextStepIdx, 0)
     }
+  }
+
+  // ── 다음에 할 단계 찾기 / 운동 건너뛰기 ─────────────────────────────
+  // 아직 할 단계 중 다음 것: 건너뛴 운동, 또는 세트를 덜 하고 마친 운동의 남은 단계는 뛰어넘는다. 더 없으면 flatSteps.length.
+  const isDeadStep = (s, extraDeadId) => s.logId === extraDeadId || skippedIds.has(s.logId) || !!logs.find(l => l.id === s.logId)?.isCompleted
+  const findNextLiveStep = (from, extraDeadId = null) => {
+    for (let i = from; i < flatSteps.length; i++) if (!isDeadStep(flatSteps[i], extraDeadId)) return i
+    return flatSteps.length
+  }
+
+  // 건너뜀 칼럼이 DB에 없으면(SQL 미실행) 건너뜀이 저장되지 않아 앱을 다시 열면 예정으로 돌아온다 — 확인창에 알린다
+  const skipSqlNote = () => (skippedSupported === false ? '\n(※ 이 데이터베이스에는 건너뜀 칼럼이 없어서 앱을 다시 열면 예정으로 돌아와요. supabase/log_skipped.sql 실행이 필요해요.)' : '')
+
+  // 이 운동 건너뛰기: 한 세트라도 했으면 한 만큼만 저장하고 마친다(남은 세트는 안 함). 한 세트도 안 했으면 기록 없이 오늘 세션에서만 뺀다
+  // (오늘 기록은 미완료로 남아 나중에 할 수 있다). 수퍼세트면 짝 운동은 계속 이어간다.
+  const skipExercise = () => {
+    if (!currentLog || reviewIdx !== null) return
+    const sets = performedByLog[currentLog.id] || []
+    const ask = sets.length
+      ? `이 운동을 여기서 마칠까요?\n지금까지 한 ${sets.length}세트만 기록하고, 남은 세트는 건너뛰어요.`
+      : `이 운동을 건너뛸까요?\n기록 없이 다음 운동으로 넘어가요. 오늘 기록에 '건너뜀'으로 남고, 기록 화면에서 다시 할 수 있어요.${skipSqlNote()}`
+    if (!confirm(ask)) return
+    if (sets.length) {
+      const recentMax = getRecentMaxWeight(logs, currentLog.exercise)
+      const fatigue = estimateExerciseFatigue(sets, recentMax)
+      setLogs(prev => prev.map(l => (l.id === currentLog.id ? { ...l, performedSets: sets, fatigue, isCompleted: true } : l)))
+      if (settings.autoProgression) applyProgression(currentLog, sets, fatigue) // 계획한 세트를 다 못 했으면 규칙이 "유지"로 판단한다
+    } else {
+      setLogs(prev => prev.map(l => (l.id === currentLog.id ? { ...l, skipped: true } : l)))
+    }
+    const nextIdx = findNextLiveStep(stepCursor + 1, currentLog.id)
+    if (nextIdx < flatSteps.length) return startStep(nextIdx, null) // 쉬지 않고 바로 다음 단계(수퍼세트 짝 운동)
+    const nextGroup = findNextPendingGroup(groupIdx)
+    if (nextGroup === -1) setSubPhase('finished')
+    else setGroupIdx(nextGroup)
+  }
+
+  // ── 운동 바꾸기(lib/exerciseSwap.js) ───────────────────────────────
+  // 세트·횟수·휴식 목표는 그대로, 운동명과 무게만 바뀐다. 무게는 새 운동의 지난 기록에서 가져오고 없으면 0(운동 화면에서 직접 입력).
+  // "오늘만"이면 오늘 기록만, "루틴에도"면 루틴과 앞으로 예정된 같은 운동 기록도 바꾼다(이미 한 기록은 그대로).
+  const handleSwapPick = (exercise, scope) => {
+    const log = swapLog
+    if (!log) return
+    const weight = lastWeightFor(exercise.name, logs) ?? 0
+    const toRoutine = scope === 'routine' && !!log.routineId
+    setLogs(prev => swapLogs(prev, log, exercise.name, weight, toRoutine))
+    if (toRoutine) setRoutines(prev => swapRoutine(prev, log, exercise.name, weight))
+    // 세트 진행 화면에서 바꿨다면 입력칸을 새 운동의 목표로 다시 채운다
+    if (subPhase === 'active' && currentLog?.id === log.id) {
+      setSetForm({ reps: log.targetReps || 0, weight })
+      setSetStartAt(Date.now())
+    }
+    setSwapLog(null)
+  }
+
+  // ── 루틴 종료 ─────────────────────────────────────────────────────
+  // 오늘 아직 안 한 운동을 모두 "건너뜀"으로 표시하고 마친다. 한 운동은 그대로 남고, 건너뜀은 기록 화면에서 다시 할 수 있다.
+  // (건너뜀은 "아직 할 운동"에 세지 않으므로, 종료한 뒤에는 메인 메뉴 카드·기록 화면의 시작하기에서 이 루틴이 더 이상 운동 중으로 보이지 않는다.)
+  const endRoutine = () => {
+    const pending = allSessionLogs.filter(l => !l.isCompleted && !l.skipped)
+    const draftNote = pendingDraft ? '\n임시 저장된 세트 기록은 버려져요.' : ''
+    const ask = pending.length
+      ? `루틴을 종료할까요?\n아직 안 한 운동 ${pending.length}개는 '건너뜀'으로 기록에 남아요. (기록 화면에서 다시 할 수 있어요.)${draftNote}${skipSqlNote()}`
+      : `루틴을 종료할까요?${draftNote}`
+    if (!confirm(ask)) return
+    if (pendingDraft) {
+      clearDraft(draftStorageKey)
+      setPendingDraft(null)
+    }
+    setLogs(prev => prev.map(l => (l.routineId === routineId && l.date === date && !l.isCompleted && !l.skipped ? { ...l, skipped: true } : l)))
+    setSubPhase('finished')
   }
 
   const finishRest = () => {
@@ -579,16 +659,20 @@ export default function WorkoutSession() {
               {groups.map((ids, gi) => {
                 const rows = ids.map(id => logs.find(l => l.id === id)).filter(Boolean)
                 const groupDone = isGroupDone(gi)
+                const groupSkipped = groupDone && ids.some(id => skippedIds.has(id)) // 건너뛴 운동이 든 그룹 — 눌러서 다시 할 수 있다
                 const isSelectedGroup = gi === groupIdx && !groupDone
                 return (
                   <button
                     key={ids[0]}
                     type="button"
-                    disabled={groupDone}
-                    onClick={() => setGroupIdx(gi)}
+                    disabled={groupDone && !groupSkipped}
+                    onClick={() => {
+                      if (groupSkipped) setLogs(prev => prev.map(l => (ids.includes(l.id) && !l.isCompleted ? { ...l, skipped: false } : l)))
+                      setGroupIdx(gi)
+                    }}
                     aria-pressed={isSelectedGroup}
                     className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${
-                      groupDone ? 'bg-gray-50 border-gray-100 cursor-not-allowed opacity-60' : isSelectedGroup ? 'bg-blue-50 border-letusBlue' : 'bg-white border-gray-200 active:bg-gray-50'
+                      groupSkipped ? 'bg-orange-50 border-orange-200 active:bg-orange-100' : groupDone ? 'bg-gray-50 border-gray-100 cursor-not-allowed opacity-60' : isSelectedGroup ? 'bg-blue-50 border-letusBlue' : 'bg-white border-gray-200 active:bg-gray-50'
                     }`}
                   >
                     {rows.length > 1 && (
@@ -602,10 +686,10 @@ export default function WorkoutSession() {
                         <div key={l.id} className="flex items-center gap-3">
                           <span
                             className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-m-caption font-black ${
-                              l.isCompleted ? 'bg-green-100 text-green-600' : isSelectedGroup ? 'bg-letusBlue text-white' : 'bg-gray-100 text-gray-500'
+                              l.isCompleted ? 'bg-green-100 text-green-600' : skippedIds.has(l.id) ? 'bg-orange-100 text-orange-600' : isSelectedGroup ? 'bg-letusBlue text-white' : 'bg-gray-100 text-gray-500'
                             }`}
                           >
-                            {l.isCompleted ? <Check className="w-3.5 h-3.5" /> : sessionIds.indexOf(l.id) + 1}
+                            {l.isCompleted ? <Check className="w-3.5 h-3.5" /> : skippedIds.has(l.id) ? <SkipForward className="w-3.5 h-3.5" /> : sessionIds.indexOf(l.id) + 1}
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className={`text-m-body font-bold truncate ${l.isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>{l.exercise}</div>
@@ -617,7 +701,9 @@ export default function WorkoutSession() {
                       ))}
                     </div>
                     {(groupDone || isSelectedGroup) && (
-                      <div className={`mt-1.5 text-right text-m-caption font-bold ${groupDone ? 'text-green-600' : 'text-letusBlue'}`}>{groupDone ? '완료' : '선택됨'}</div>
+                      <div className={`mt-1.5 text-right text-m-caption font-bold ${groupSkipped ? 'text-orange-600' : groupDone ? 'text-green-600' : 'text-letusBlue'}`}>
+                        {groupSkipped ? '건너뜀 · 누르면 다시 하기' : groupDone ? '완료' : '선택됨'}
+                      </div>
                     )}
                   </button>
                 )
@@ -636,7 +722,20 @@ export default function WorkoutSession() {
                     const style = last?.result ? VERDICT_STYLE[last.result.verdict] : null
                     return (
                       <div key={l.id}>
-                        <div className="text-2xl font-black text-gray-800">{l.exercise}</div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-2xl font-black text-gray-800">{l.exercise}</div>
+                          {/* 이미 끝낸 운동(건너뛴 짝 운동을 다시 살린 수퍼세트에서 남아 있을 수 있다)은 바꿀 수 없다 */}
+                          {!l.isCompleted && (
+                            <button
+                              type="button"
+                              onClick={() => setSwapLog(l)}
+                              className="shrink-0 flex items-center gap-1 px-3 min-h-[36px] rounded-full border border-gray-200 bg-white text-m-caption font-bold text-gray-700 active:bg-gray-100"
+                            >
+                              <ArrowLeftRight className="w-3.5 h-3.5" />
+                              바꾸기
+                            </button>
+                          )}
+                        </div>
                         <div className="text-m-body font-bold text-gray-400">
                           {l.targetSets}세트 × {sideOf(l.exercise)}{l.targetReps}회 × {kgLabel(l.targetWeight)} 목표
                         </div>
@@ -695,6 +794,11 @@ export default function WorkoutSession() {
               >
                 시작하기
               </button>
+              {/* 남은 운동을 건너뜀으로 하고 루틴을 마친다 */}
+              <button type="button" onClick={endRoutine} className="mx-auto shrink-0 flex items-center gap-1.5 px-4 py-3 text-m-body font-bold text-gray-400 underline underline-offset-2">
+                <Flag className="w-4 h-4" />
+                루틴 종료
+              </button>
             </>
           ) : (
             <div className="text-center space-y-3 py-2">
@@ -720,6 +824,18 @@ export default function WorkoutSession() {
               <span className="inline-block px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 text-m-caption font-bold">한쪽씩 · 왼쪽·오른쪽을 모두 하면 1세트</span>
             </div>
           )}
+          {doneSets.length === 0 && reviewIdx === null && (
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                onClick={() => setSwapLog(currentLog)}
+                className="inline-flex items-center gap-1 px-3 min-h-[32px] rounded-full bg-gray-100 text-gray-600 text-m-caption font-bold active:bg-gray-200"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                운동 바꾸기
+              </button>
+            </div>
+          )}
           <SetDots total={currentLog.targetSets || 1} done={doneSets.length} viewing={reviewIdx} locked={editing} onSelect={openFinishedSet} />
           {/* 끝낸 세트를 보고 있을 때만 안내가 나온다. 화면이 출렁이지 않게 자리는 항상 잡아 둔다 */}
           <div className={`h-5 mt-3 mb-4 text-center text-m-caption font-bold ${editing ? 'text-letusBlue' : 'text-gray-400'}`}>
@@ -740,12 +856,18 @@ export default function WorkoutSession() {
           })()}
 
           {reviewIdx === null ? (
-            <button
-              onClick={completeSet}
-              className="w-full h-16 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8"
-            >
-              세트 완료
-            </button>
+            <>
+              <button
+                onClick={completeSet}
+                className="w-full h-16 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8"
+              >
+                세트 완료
+              </button>
+              <button type="button" onClick={skipExercise} className="mx-auto mt-3 flex items-center gap-1.5 px-4 py-3 text-m-body font-bold text-gray-400 underline underline-offset-2">
+                <SkipForward className="w-4 h-4" />
+                이 운동 건너뛰기
+              </button>
+            </>
           ) : editing ? (
             <>
               <button onClick={saveEdit} className="w-full h-16 bg-letusBlue text-white font-black text-m-title rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all mt-8">
@@ -797,8 +919,8 @@ export default function WorkoutSession() {
 
       {subPhase === 'finished' && (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
-          <div className="text-5xl">🎉</div>
-          <div className="text-xl font-black text-gray-800">오늘 루틴 완료!</div>
+          <div className="text-5xl">{doneCount > 0 ? '🎉' : '👋'}</div>
+          <div className="text-xl font-black text-gray-800">{doneCount > 0 ? '오늘 루틴 완료!' : '루틴을 종료했어요'}</div>
           <div className="text-m-caption text-gray-400">{routine.name}</div>
 
           {/* 총 운동 시간 — 세트 시작·종료 시각을 합친 실측값 (사이 휴식 포함, 15분 넘게 쉰 구간은 제외) */}
@@ -818,6 +940,14 @@ export default function WorkoutSession() {
             </div>
           )}
           {dayKcal.needsWeight && <div className="text-m-caption font-bold text-gray-400">신체 기록에 몸무게를 입력하면 소모 칼로리가 표시됩니다.</div>}
+
+          {skippedLogs.length > 0 && (
+            <div className="w-full max-w-sm rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-left mt-2">
+              <div className="text-m-caption font-bold text-orange-800">건너뛴 운동</div>
+              <div className="text-m-body font-bold text-orange-700">{skippedLogs.map(l => l.exercise).join(' · ')}</div>
+              <div className="text-m-caption text-orange-700/80 leading-relaxed">오늘 기록에 건너뜀으로 남아 있어요. 기록 화면에서 다시 할 수 있어요.</div>
+            </div>
+          )}
 
           {progressionNotes.length > 0 && (
             <div className="w-full max-w-sm space-y-1.5 mt-4 text-left">
@@ -857,6 +987,19 @@ export default function WorkoutSession() {
         </div>
       )}
 
+      {swapLog && (
+        <SwapExerciseSheet
+          log={swapLog}
+          catalog={exerciseCatalog}
+          excludeNames={sessionExcludeNames(logs, routineId, date)}
+          routineNames={routineExerciseNames(routines, routineId)}
+          myEquipment={settings.myEquipment || []}
+          canApplyToRoutine={!!swapLog.routineId && !!planOf(swapLog)}
+          weightFor={name => lastWeightFor(name, logs)}
+          onPick={handleSwapPick}
+          onClose={() => setSwapLog(null)}
+        />
+      )}
       {stretchKind && <StretchSheet kind={stretchKind} muscles={stretchKind === 'warmup' ? warmupMuscles : cooldownMuscles} onClose={() => setStretchKind(null)} />}
     </div>
   )

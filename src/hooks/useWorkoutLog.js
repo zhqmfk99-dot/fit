@@ -131,10 +131,12 @@ export function useWorkoutLog() {
             }))
         const recentMax = getRecentMaxWeight(logs, l.exercise)
         const fatigue = estimateExerciseFatigue(performedSets, recentMax)
-        return { ...l, performedSets, fatigue, isCompleted: true }
+        return { ...l, performedSets, fatigue, isCompleted: true, skipped: false }
       }),
     )
   }
+  // 건너뜀으로 표시된 운동을 다시 예정으로 되돌린다(기록 화면의 다시 하기)
+  const restoreSkipped = id => setLogs(prev => prev.map(l => (l.id === id ? { ...l, skipped: false } : l)))
   const handleModalSave = saved => {
     setLogs(prev => (modalRow ? prev.map(l => (l.id === saved.id ? saved : l)) : [saved, ...prev]))
     setListDate(saved.date)
@@ -171,6 +173,7 @@ export function useWorkoutLog() {
     openEdit,
     handleDelete,
     toggleComplete,
+    restoreSkipped,
     handleModalSave,
   }
 }

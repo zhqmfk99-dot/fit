@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { ChevronDown, CalendarClock, Play } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import WorkoutFormModal from '../components/web/WorkoutFormModal.jsx'
@@ -8,6 +8,7 @@ import { useDayDuration } from '../hooks/useDayDuration.js'
 import { formatDuration } from '../lib/workoutTime.js'
 import RescheduleModal from '../components/web/RescheduleModal.jsx'
 import { setCount, avgReps, avgWeight } from '../lib/workoutMetrics.js'
+import { isPending, isSkipped } from '../lib/logStatus.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../hooks/useWorkoutLog.js'
 
 export default function WorkoutLog() {
@@ -41,6 +42,7 @@ export default function WorkoutLog() {
     openEdit,
     handleDelete,
     toggleComplete,
+    restoreSkipped,
     handleModalSave,
   } = useWorkoutLog()
   const [showBodyModal, setShowBodyModal] = useState(false)
@@ -51,7 +53,7 @@ export default function WorkoutLog() {
     <div
       key={log.id}
       className={`group px-3 py-2.5 rounded-lg border transition-colors flex items-center justify-between gap-2 ${
-        log.isCompleted ? 'border-gray-100 bg-white hover:border-gray-200' : 'border-dashed border-gray-300 bg-gray-50'
+        log.isCompleted ? 'border-gray-100 bg-white hover:border-gray-200' : isSkipped(log) ? 'border-dashed border-orange-200 bg-orange-50' : 'border-dashed border-gray-300 bg-gray-50'
       }`}
     >
       <div className="flex flex-col gap-0.5 min-w-0">
@@ -64,9 +66,16 @@ export default function WorkoutLog() {
         {log.isCompleted ? (
           <span className={`text-ui-caption font-bold px-2 py-0.5 rounded ${fatigueBadgeColor(log.fatigue)}`}>{log.fatigue}</span>
         ) : (
-          <span className="text-ui-caption font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-400">예정</span>
+          <span className={`text-ui-caption font-bold px-2 py-0.5 rounded ${isSkipped(log) ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-400'}`}>{isSkipped(log) ? '건너뜀' : '예정'}</span>
         )}
         <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+          {isSkipped(log) && (
+            <button onClick={() => restoreSkipped(log.id)} className="p-1.5 text-gray-400 hover:text-letusBlue hover:bg-gray-100 rounded-full transition-colors" title="다시 하기">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 12a9 9 0 109-9 9 9 0 00-6.36 2.64L3 8m0-5v5h5" />
+              </svg>
+            </button>
+          )}
           {!log.isCompleted && (
             <button
               onClick={() => toggleComplete(log.id)}
@@ -219,6 +228,8 @@ export default function WorkoutLog() {
                       {dayLogs.map(log =>
                         log.isCompleted ? (
                           <div key={log.id} className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${fatigueDotColor(log.fatigue)}`} title={`${log.exercise} (피로 ${log.fatigue})`} />
+                        ) : isSkipped(log) ? (
+                          <div key={log.id} className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-orange-300 bg-orange-100" title={`${log.exercise} (건너뜀)`} />
                         ) : (
                           <div key={log.id} className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-gray-400 bg-white" title={`${log.exercise} (예정)`} />
                         ),
@@ -262,7 +273,8 @@ export default function WorkoutLog() {
                 const completedCount = group.logs.filter(l => l.isCompleted).length
 
                 const groupDate = group.logs[0]?.date
-                const hasPending = group.logs.some(l => !l.isCompleted)
+                const hasPending = group.logs.some(isPending)
+                const skippedCount = group.logs.filter(isSkipped).length
 
                 return (
                   <div key={group.routineId} className="group/routine border border-gray-100 rounded-lg overflow-hidden">
@@ -271,7 +283,7 @@ export default function WorkoutLog() {
                         <ChevronDown className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         <span className="text-ui-body font-bold text-gray-800 truncate">{routine?.name || '루틴'}</span>
                         <span className="text-ui-caption font-bold text-gray-400 shrink-0">
-                          {completedCount}/{group.logs.length} 완료
+                          {completedCount}/{group.logs.length} 완료{skippedCount > 0 && ` · 건너뜀 ${skippedCount}`}
                         </span>
                       </button>
 

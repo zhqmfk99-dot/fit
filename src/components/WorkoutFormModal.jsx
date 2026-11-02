@@ -62,6 +62,7 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
       fatigue: Number(form.fatigue) || 0,
       // 완료 여부는 이 모달에서 건드리지 않는다 — 기존 값 유지, 신규 수동 등록은 완료로 시작
       isCompleted: row?.isCompleted ?? true,
+      skipped: row?.skipped ?? false, // 건너뜀 표시도 이 모달에서 건드리지 않는다
       routineId: row?.routineId,
     })
     onClose()

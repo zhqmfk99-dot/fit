@@ -5,6 +5,7 @@ import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import QuickWorkoutModal from './QuickWorkoutModal.jsx'
 import { targetRepsOf } from '../../lib/progression.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
+import { isPending, isSkipped } from '../../lib/logStatus.js'
 
 const MENU_ITEMS = [
   { path: '/mobile/dashboard', label: '대시보드', icon: LayoutDashboard, iconBg: 'bg-blue-50', iconColor: 'text-letusBlue' },
@@ -29,19 +30,22 @@ export default function MobileMenuScreen() {
 
   // "운동하기" 카드에 오늘 상태를 보여준다 — 예정된 루틴이 있으면 이름과 진행 현황, 없으면 안내
   const todayLogs = logs.filter(l => l.date === todayDate)
-  const pendingToday = todayLogs.find(l => l.routineId && !l.isCompleted)
+  // 건너뜀(루틴 종료·운동 건너뛰기)은 "아직 할 운동"에 세지 않는다 — 안 그러면 건너뛴 뒤에도 루틴이 계속 운동 중으로 보인다
+  const pendingToday = todayLogs.find(l => l.routineId && isPending(l))
   const pendingRoutine = pendingToday ? routines.find(r => r.id === pendingToday.routineId) : null
   const sessionLogs = pendingToday ? todayLogs.filter(l => l.routineId === pendingToday.routineId) : []
   const startSubtitle = pendingToday
     ? `${pendingRoutine?.name || '오늘 루틴'} · ${sessionLogs.filter(l => l.isCompleted).length}/${sessionLogs.length} 완료`
     : todayLogs.some(l => l.isCompleted)
       ? '오늘 운동을 마쳤어요 · 추가 운동 시작'
-      : '오늘 예정된 루틴이 없어요 · 바로 등록하고 시작'
+      : todayLogs.some(isSkipped)
+        ? '오늘 루틴을 종료했어요 · 추가 운동 시작'
+        : '오늘 예정된 루틴이 없어요 · 바로 등록하고 시작'
 
   // "운동하기"는 캘린더를 거치지 않고 오늘 예정된 루틴으로 바로 진입하는 지름길이다.
   // 오늘 예정된 루틴이 없으면, 그 자리에서 즉석으로 운동을 등록하고 바로 시작할 수 있게 한다.
   const handleStartWorkout = () => {
-    const pending = logs.find(l => l.date === todayDate && l.routineId && !l.isCompleted)
+    const pending = logs.find(l => l.date === todayDate && l.routineId && isPending(l))
     if (pending) {
       navigate(`/mobile/session?routineId=${pending.routineId}&date=${todayDate}`)
     } else {

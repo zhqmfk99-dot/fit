@@ -51,7 +51,7 @@ export function loadDraft(key, logs, { storage = defaultStorage(), now = Date.no
     const kept = {}
     for (const [id, sets] of Object.entries(d.performedByLog)) {
       const log = logs.find(l => l.id === id)
-      if (!log || log.isCompleted || !Array.isArray(sets) || !sets.length || !sets.every(validSet)) continue
+      if (!log || log.isCompleted || log.skipped || !Array.isArray(sets) || !sets.length || !sets.every(validSet)) continue
       if (sets.length >= (log.targetSets || 1)) continue
       kept[id] = sets
     }

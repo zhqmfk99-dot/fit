@@ -48,6 +48,7 @@ const logFromRow = r => ({
   fatigue: r.fatigue,
   isCompleted: r.is_completed,
   kcal: r.kcal == null ? null : Number(r.kcal), // 소모 칼로리(추정) — 완료·수정 시 앱이 계산해서 저장 (lib/calories.js)
+  skipped: !!r.skipped, // 하지 않기로 한(건너뛴) 운동 — 완료도 예정도 아닌 상태 (lib/logStatus.js)
 })
 const logToRow = l => ({
   id: l.id,
@@ -63,6 +64,7 @@ const logToRow = l => ({
   fatigue: l.fatigue ?? null,
   is_completed: !!l.isCompleted,
   kcal: l.kcal ?? null,
+  skipped: !!l.skipped,
 })
 
 const num = v => (v == null ? null : Number(v))
@@ -217,10 +219,14 @@ export function WorkoutLogsProvider({ children }) {
   // DB에 kcal 칼럼이 아직 없으면(SQL 미실행) 칼로리를 채우지도 저장하지도 않아서 운동 기록 저장이 실패하지 않게 한다.
   // (이때 화면의 칼로리는 저장값 없이 즉석 계산으로만 보인다)
   const kcalColumnRef = useRef(true)
+  // workout_logs.skipped 칼럼이 없으면(SQL 미실행) 그 값도 저장하지 않아서 운동 기록 저장이 실패하지 않게 한다. 이때 건너뜀은 앱을 다시 열면 사라진다(화면에 안내).
+  const skippedColumnRef = useRef(true)
+  const [skippedSupported, setSkippedSupported] = useState(true)
   const transformLogs = useCallback((next, prev) => (kcalColumnRef.current ? applyKcal(next, prev, weightSourceRef.current) : next), [])
   const toLogRow = useCallback(l => {
     const row = logToRow(l)
     if (!kcalColumnRef.current) delete row.kcal
+    if (!skippedColumnRef.current) delete row.skipped
     return row
   }, [])
   // exercises.unilateral 칼럼이 아직 없으면(SQL 미실행) 그 값은 저장하지 않아서 운동 저장이 실패하지 않게 한다. 이때 표시는 유지되지 않는다.
@@ -273,6 +279,12 @@ export function WorkoutLogsProvider({ children }) {
         kcalColumnRef.current = false
         console.warn('workout_logs.kcal 칼럼이 없어 칼로리를 저장하지 않습니다. supabase/log_kcal.sql을 실행하세요.')
       }
+      // skipped 칼럼 유무 확인(kcal과 같은 방식)
+      if (lo.data.length && !('skipped' in lo.data[0])) {
+        skippedColumnRef.current = false
+        setSkippedSupported(false)
+        console.warn('workout_logs.skipped 칼럼이 없어 건너뜀 표시를 저장하지 않습니다. supabase/log_skipped.sql을 실행하세요.')
+      }
       replaceLogs(loadedLogs)
       replaceBodyRecords(loadedBodyRecords)
       setLoading(false)
@@ -292,7 +304,7 @@ export function WorkoutLogsProvider({ children }) {
   }
 
   return (
-    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported }}>
+    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported, skippedSupported }}>
       {error && (
         <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
           <span>{error}</span>

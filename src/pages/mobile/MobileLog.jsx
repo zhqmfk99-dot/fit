@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, CalendarClock, Play, Check, Pencil, Trash2, Search, X, Scale } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, CalendarClock, Play, Check, Pencil, Trash2, Search, X, Scale, RotateCcw } from 'lucide-react'
 import PageHeader from '../../components/PageHeader.jsx'
 import WorkoutFormModal from '../../components/WorkoutFormModal.jsx'
 import RescheduleModal from '../../components/RescheduleModal.jsx'
@@ -9,6 +9,7 @@ import { useDayKcal } from '../../hooks/useDayKcal.js'
 import { useDayDuration } from '../../hooks/useDayDuration.js'
 import { formatDuration } from '../../lib/workoutTime.js'
 import { setCount, avgReps, avgWeight } from '../../lib/workoutMetrics.js'
+import { isPending, isSkipped } from '../../lib/logStatus.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../../hooks/useWorkoutLog.js'
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
@@ -53,6 +54,7 @@ export default function MobileLog() {
     openEdit,
     handleDelete,
     toggleComplete,
+    restoreSkipped,
     handleModalSave,
   } = useWorkoutLog()
   const { bodyRecords } = useWorkoutLogs()
@@ -68,7 +70,7 @@ export default function MobileLog() {
     <div
       key={log.id}
       className={`px-3 py-2.5 rounded-lg border flex items-center justify-between gap-2 ${
-        log.isCompleted ? 'border-gray-100 bg-white' : 'border-dashed border-gray-300 bg-gray-50'
+        log.isCompleted ? 'border-gray-100 bg-white' : isSkipped(log) ? 'border-dashed border-orange-200 bg-orange-50' : 'border-dashed border-gray-300 bg-gray-50'
       }`}
     >
       <div className="flex flex-col gap-0.5 min-w-0">
@@ -81,7 +83,12 @@ export default function MobileLog() {
         {log.isCompleted ? (
           <span className={`text-m-caption font-bold px-2 py-0.5 rounded ${fatigueBadgeColor(log.fatigue)} mr-1`}>{log.fatigue}</span>
         ) : (
-          <span className="text-m-caption font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-400 mr-1">예정</span>
+          <span className={`text-m-caption font-bold px-2 py-0.5 rounded mr-1 ${isSkipped(log) ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-400'}`}>{isSkipped(log) ? '건너뜀' : '예정'}</span>
+        )}
+        {isSkipped(log) && (
+          <button onClick={() => restoreSkipped(log.id)} className="w-9 h-9 flex items-center justify-center text-gray-400 active:text-letusBlue active:bg-gray-100 rounded-full transition-colors" title="다시 하기">
+            <RotateCcw className="w-4 h-4" />
+          </button>
         )}
         {!log.isCompleted && (
           <button onClick={() => toggleComplete(log.id)} className="w-9 h-9 flex items-center justify-center text-gray-400 active:text-green-600 active:bg-gray-100 rounded-full transition-colors" title="완료 처리">
@@ -228,7 +235,8 @@ export default function MobileLog() {
             const isExpanded = expandedRoutineIds.includes(group.routineId)
             const completedCount = group.logs.filter(l => l.isCompleted).length
             const groupDate = group.logs[0]?.date
-            const hasPending = group.logs.some(l => !l.isCompleted)
+            const hasPending = group.logs.some(isPending)
+            const skippedCount = group.logs.filter(isSkipped).length
 
             return (
               <div key={group.routineId} className="border border-gray-100 rounded-lg overflow-hidden bg-white">
@@ -236,7 +244,7 @@ export default function MobileLog() {
                   <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   <span className="text-m-body font-bold text-gray-800 truncate flex-1">{routine?.name || '루틴'}</span>
                   <span className="text-m-caption font-bold text-gray-400 shrink-0">
-                    {completedCount}/{group.logs.length} 완료
+                    {completedCount}/{group.logs.length} 완료{skippedCount > 0 && ` · 건너뜀 ${skippedCount}`}
                   </span>
                 </button>
 
