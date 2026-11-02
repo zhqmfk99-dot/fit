@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder
+      - name: 서버 함수 구문 검사 (빌드에 포함되지 않음)
+        run: node --check api/generate-routine.js
+      - run: npm test
+      # SQL 검증은 임베디드 Postgres(PGlite)가 필요하다. 앱 의존성이 아니라서 저장하지 않고 설치만 한다.
+      - run: npm i --no-save @electric-sql/pglite
+      - run: npm run test:sql
