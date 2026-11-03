@@ -10,6 +10,7 @@ import { useDayDuration } from '../../hooks/useDayDuration.js'
 import { formatDuration } from '../../lib/workoutTime.js'
 import { setCount, avgReps, avgWeight } from '../../lib/workoutMetrics.js'
 import { isPending, isSkipped } from '../../lib/logStatus.js'
+import { buildDayDots } from '../../lib/dayDots.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../../hooks/useWorkoutLog.js'
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
@@ -188,13 +189,18 @@ export default function MobileLog() {
                     {cell.date.getDate()}
                   </span>
                   <div className="flex gap-0.5 h-1.5">
-                    {dayLogs.slice(0, 3).map(log =>
-                      log.isCompleted ? (
-                        <div key={log.id} className={`w-1.5 h-1.5 rounded-full ${fatigueDotColor(log.fatigue)}`} />
-                      ) : (
-                        <div key={log.id} className="w-1.5 h-1.5 rounded-full border border-gray-400 bg-white" />
-                      ),
-                    )}
+                    {/* 루틴 하나(같은 날짜)가 dot 1개, 수동 운동은 각각 dot 1개 — 색은 완료한 운동의 평균 피로도 (lib/dayDots.js) */}
+                    {buildDayDots(dayLogs, id => routines.find(r => r.id === id)?.name)
+                      .slice(0, 3)
+                      .map(dot =>
+                        dot.kind === 'done' ? (
+                          <div key={dot.key} className={`w-1.5 h-1.5 rounded-full ${fatigueDotColor(dot.fatigue)}`} />
+                        ) : dot.kind === 'skipped' ? (
+                          <div key={dot.key} className="w-1.5 h-1.5 rounded-full border border-orange-300 bg-orange-100" />
+                        ) : (
+                          <div key={dot.key} className="w-1.5 h-1.5 rounded-full border border-gray-400 bg-white" />
+                        ),
+                      )}
                     {/* 신체 기록이 있는 날은 초록 네모로 표시 */}
                     {hasBody && <div className="w-1.5 h-1.5 rounded-[2px] bg-emerald-500" />}
                   </div>

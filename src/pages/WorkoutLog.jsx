@@ -9,6 +9,7 @@ import { formatDuration } from '../lib/workoutTime.js'
 import RescheduleModal from '../components/web/RescheduleModal.jsx'
 import { setCount, avgReps, avgWeight } from '../lib/workoutMetrics.js'
 import { isPending, isSkipped } from '../lib/logStatus.js'
+import { buildDayDots } from '../lib/dayDots.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../hooks/useWorkoutLog.js'
 
 export default function WorkoutLog() {
@@ -226,13 +227,14 @@ export default function WorkoutLog() {
                     </div>
 
                     <div className="flex flex-wrap gap-1 mt-1.5 px-0.5 content-start flex-1">
-                      {dayLogs.map(log =>
-                        log.isCompleted ? (
-                          <div key={log.id} className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${fatigueDotColor(log.fatigue)}`} title={`${log.exercise} (피로 ${log.fatigue})`} />
-                        ) : isSkipped(log) ? (
-                          <div key={log.id} className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-orange-300 bg-orange-100" title={`${log.exercise} (건너뜀)`} />
+                      {/* 루틴 하나(같은 날짜)가 dot 1개, 수동 운동은 각각 dot 1개 — 색은 완료한 운동의 평균 피로도 (lib/dayDots.js) */}
+                      {buildDayDots(dayLogs, id => routines.find(r => r.id === id)?.name).map(dot =>
+                        dot.kind === 'done' ? (
+                          <div key={dot.key} className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${fatigueDotColor(dot.fatigue)}`} title={dot.title} />
+                        ) : dot.kind === 'skipped' ? (
+                          <div key={dot.key} className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-orange-300 bg-orange-100" title={dot.title} />
                         ) : (
-                          <div key={log.id} className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-gray-400 bg-white" title={`${log.exercise} (예정)`} />
+                          <div key={dot.key} className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-gray-400 bg-white" title={dot.title} />
                         ),
                       )}
                     </div>
