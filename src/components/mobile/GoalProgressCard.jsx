@@ -1,5 +1,9 @@
+import { useState } from 'react'
 import { useBodyGoal } from '../../hooks/useBodyGoal.js'
+import { useBodyCheckReminder } from '../../hooks/useBodyCheckReminder.js'
+import { getLocalDateString } from '../../hooks/useWorkoutLog.js'
 import { describeMetric } from '../../lib/bodyGoal.js'
+import BodyRecordModal from './BodyRecordModal.jsx'
 
 const md = s => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`
 
@@ -40,6 +44,8 @@ function Block({ label, unit, m, info }) {
 // 내 목표 진행 카드 (PWA용 화면) — 설정의 목표 체중·체지방률과 신체 기록을 비교한다. 계산은 lib/bodyGoal.js(웹앱과 공용). 목표가 없으면 보이지 않는다.
 export default function GoalProgressCard() {
   const goal = useBodyGoal()
+  const { reminder, text: reminderText } = useBodyCheckReminder() // 마지막 신체 기록일 + 14일이 지나면 측정·기록 알림
+  const [showBody, setShowBody] = useState(false)
   if (!goal.hasGoal) return null
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -47,11 +53,20 @@ export default function GoalProgressCard() {
         <h3 className="text-m-title font-bold text-gray-800">내 목표</h3>
         {goal.goalDate && <span className="text-m-caption text-gray-400">목표일 {md(goal.goalDate)}</span>}
       </div>
+      {reminder && (
+        <div className="mt-3 rounded-lg bg-orange-50 border border-orange-100 px-3 py-2.5 flex items-center justify-between gap-3" role="status">
+          <span className="text-m-caption font-bold text-orange-700 leading-relaxed">{reminderText}</span>
+          <button type="button" onClick={() => setShowBody(true)} className="shrink-0 px-3 min-h-[36px] rounded-lg bg-letusBlue text-white text-m-caption font-bold active:bg-blue-600">
+            신체 기록
+          </button>
+        </div>
+      )}
       <div className="mt-3 space-y-2.5">
         {goal.weight && <Block label="체중" unit="kg" m={goal.weight} info={goal} />}
         {goal.fat && <Block label="체지방률" unit="%" m={goal.fat} info={goal} />}
       </div>
       <p className="mt-3 text-m-caption text-gray-400 leading-relaxed">지금 값은 최근 30일 신체 기록 중 마지막 3개의 평균이에요. 추세는 날짜 기준으로 계산해서 기록이 불규칙해도 쓸 수 있어요. 추정이라 실제와 다를 수 있어요.</p>
+      {showBody && <BodyRecordModal initialDate={getLocalDateString(new Date())} onClose={() => setShowBody(false)} />}
     </div>
   )
 }
