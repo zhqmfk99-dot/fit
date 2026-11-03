@@ -229,7 +229,7 @@ export default function WorkoutSettings() {
         </Section>
 
         <Section title="AI 루틴 만들기">
-          <Row title="내 운동 기록 참고" desc="자주 한 운동과 최근 안 쓴 부위를 참고해요. 운동 이름·부위만 보내요." right={<Switch checked={settings.aiUseHistory} onChange={v => update({ aiUseHistory: v })} label="내 운동 기록 참고" />} />
+          <Row title="내 운동 기록 참고" desc="자주 한 운동과 최근 안 쓴 부위, 맨몸 운동의 내 최고 횟수를 참고해요. 운동 이름·부위·최고 횟수만 보내요." right={<Switch checked={settings.aiUseHistory} onChange={v => update({ aiUseHistory: v })} label="내 운동 기록 참고" />} />
           <Row title="체형 정보 함께 보내기" desc="키·몸무게·성별·나이·체지방률과, 내 목표에서 계산한 방향(감량·증량 등, 목표 숫자는 제외)을 참고해요. 건강 정보라 켠 때만 보내요." right={<Switch checked={settings.aiUseBody} onChange={v => update({ aiUseBody: v })} label="체형 정보 함께 보내기" />} />
           {aiUsed != null && <Row title="최근 24시간 사용" right={<span className="text-ui-title font-bold text-gray-500">{aiUsed}회</span>} />}
         </Section>

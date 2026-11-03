@@ -30,7 +30,8 @@ const MINUTES = [30, 45, 60, 90]
 const MAX_EXERCISES_BY_MINUTES = { 30: 5, 45: 6, 60: 8, 90: 10 }
 const MAX_CATALOG = 300
 const MAX_INCLUDE = 5
-const MAX_CURRENT = 12 // 수정 요청에 실을 수 있는 현재 루틴의 운동 수
+const MAX_BODYWEIGHT_BEST = 20 // 내 맨몸 운동 최고 기록으로 받는 운동 수
+const MAX_CURRENT = 12// 수정 요청에 실을 수 있는 현재 루틴의 운동 수
 const MAX_INSTRUCTION = 200
 
 const clampInt = (v, min, max, fallback) => {
@@ -53,6 +54,11 @@ const SYSTEM_PROMPT = `너는 웨이트 트레이닝 루틴을 짜는 보조자�
 - 집중 부위가 특정 부위들(가슴·등·어깨·팔·코어)이면 **그 부위가 주된 목표인 운동만** 고르고, 선택하지 않은 부위가 주인 운동은 넣지 않는다(예: 등+어깨만 골랐으면 이두 컬·삼두 운동은 넣지 않는다. 등 운동에서 이두가 보조로 쓰이는 것은 괜찮다). 팔은 이두·삼두·전완이다. 전신·상체·하체는 큰 분류이므로 그 범위 안에서 고르게 배분한다.
 - 부상·통증·질환 이야기가 메모에 있어도 진단·처방은 하지 않는다. 해당 부위에 부담이 큰 운동을 피하고, summary에 전문가 상담을 권하는 한 문장을 넣는다.
 - "꼭 넣을 운동"이 있으면 그 운동은 반드시 포함한다. 목록에 없는 운동은 만들지 않는다.
+- **맨몸 운동(풀업·친업·딥스·푸시업·레그레이즈처럼 체중을 부하로 쓰는 운동)의 반복수는 위의 목표별 반복수를 그대로 쓰지 않는다.** 사람마다 해낼 수 있는 횟수가 크게 달라서, 잘못 잡으면 시작부터 못 채운다. 기준은 다음 순서로 정한다.
+  1) "내 맨몸 운동 최고 기록"이 있으면 그 운동은 한 세트 반복수를 그 최고 횟수의 70~90%(최고 횟수 이하)로 잡는다. 세트는 2~3개.
+  2) 기록이 없으면 체형·경력으로 보수적으로 잡는다. 풀업·친업·딥스·턱걸이처럼 체중 전체를 들어 올리는 어려운 운동은 초보 2~5회, 중급 4~8회, 상급 8~12회가 상한이고, 체중이 많이 나가거나(체지방률·BMI가 높음) 나이가 많으면 한 단계 더 낮춘다. 푸시업·크런치·레그레이즈 같은 쉬운 맨몸 운동은 초보 8~15회까지 허용한다.
+  3) 초보이거나 해낼 수 있을지 불확실한 어려운 맨몸 운동은 목록에 어시스트 머신·밴드·랫 풀다운·케이블 같은 쉬운 대체 운동이 있으면 그쪽을 우선하고, 없으면 횟수를 낮춰서라도 넣는다.
+  summary에는 이 보정 때문에 체형·체지방률을 언급·평가하지 않는다(맨몸 운동을 몇 회로 잡았는지만 써도 된다).
 - "자주 한 운동"은 사용자가 좋아하는 운동이다. 같은 운동만 반복하지 않는 선에서 우선 고려한다.
 - "최근 적게 한 부위"가 집중 부위와 겹치면 그 부위 운동을 보강한다.
 - "체형" 정보가 있으면 운동 선택과 강도 조절(예: 체중이 많이 나가거나 나이가 많거나 초보면 관절 부담이 적은 운동 우선)에만 참고한다. 체형이나 체중에 대한 평가, 진단, 식단 조언은 하지 않는다.
@@ -220,7 +226,13 @@ function parseInput(body) {
   if (body.history && typeof body.history === 'object') {
     const frequent = Array.isArray(body.history.frequent) ? [...new Set(body.history.frequent.map(i => str(i, 64)).filter(i => ids.has(i)))].slice(0, 8) : []
     const neglected = Array.isArray(body.history.neglected) ? body.history.neglected.map(m => str(m, 10)).filter(Boolean).slice(0, 4) : []
-    if (frequent.length || neglected.length) history = { frequent, neglected }
+    // 내 맨몸 운동 최고 기록: 운동 id → 한 세트 최고 횟수. 목록에 있는 운동만, 횟수는 1~100으로 제한한다.
+    const bodyweightBest = (Array.isArray(body.history.bodyweightBest) ? body.history.bodyweightBest : [])
+      .filter(b => Number(b?.reps) >= 1) // 0회·음수·숫자가 아닌 값은 clampInt가 1로 올려 버리기 전에 버린다
+      .map(b => ({ id: str(b?.id, 64), reps: clampInt(b.reps, 1, 100, 1) }))
+      .filter((b, i, a) => ids.has(b.id) && a.findIndex(x => x.id === b.id) === i)
+      .slice(0, MAX_BODYWEIGHT_BEST)
+    if (frequent.length || neglected.length || bodyweightBest.length) history = { frequent, neglected, bodyweightBest }
   }
 
   // 체형 정보(선택): 범위를 벗어난 값은 버린다
@@ -276,6 +288,7 @@ function buildUserPrompt(input) {
   if (input.include.length) lines.push(`꼭 넣을 운동: ${input.include.map(id => `${nameOf(id)}(${codeOf(input, id)})`).join(', ')}`)
   if (input.history?.frequent.length) lines.push(`자주 한 운동(선호): ${input.history.frequent.map(nameOf).join(', ')}`)
   if (input.history?.neglected.length) lines.push(`최근 4주간 적게 한 부위: ${input.history.neglected.join(', ')}`)
+  if (input.history?.bodyweightBest?.length) lines.push(`내 맨몸 운동 최고 기록(한 세트 최대 횟수): ${input.history.bodyweightBest.map(b => `${nameOf(b.id)}(${codeOf(input, b.id)}) ${b.reps}회`).join(', ')}`)
   if (input.body) {
     const b = input.body
     const bmi = b.heightCm && b.weightKg ? Math.round((b.weightKg / (b.heightCm / 100) ** 2) * 10) / 10 : null
@@ -445,10 +458,12 @@ export function sanitizeResult(raw, input, stats = {}) {
     }
     if (seen.has(id)) continue
     seen.add(id)
+    // 내 맨몸 운동 최고 기록이 있는 운동은 AI가 그보다 많은 횟수를 정해도 최고 기록까지로 줄인다(처음부터 못 채우는 목표를 막는다)
+    const best = input.history?.bodyweightBest?.find(b => b.id === id)?.reps
     exercises.push({
       id,
       sets: clampInt(e.sets, 1, 6, 3),
-      reps: clampInt(e.reps, 1, 30, 10),
+      reps: clampInt(e.reps, 1, best ?? 30, 10),
       restSeconds: clampInt(e.restSeconds, 15, 300, 90),
       linkedToNext: e.linkedToNext === true,
     })

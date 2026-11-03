@@ -6,6 +6,7 @@ import { supabase } from './supabase.js'
 import { MUSCLE_LABELS, UPPER_BODY_MUSCLES, LOWER_BODY_MUSCLES } from './muscleMap.js'
 import { calcBmi } from './bodyMetrics.js'
 import { lastWeightFor } from './lastWeight.js'
+import { buildBodyweightBest } from './bodyweightBest.js'
 
 export const AI_GOALS = ['근비대', '근력', '체지방 감량', '체력 유지']
 export const AI_MAX_GOALS = 3 // 목표는 여러 개 고를 수 있다(서버 MAX_GOALS와 같아야 한다). 여러 개면 AI가 운동마다 나눠 섞는다.
@@ -76,9 +77,10 @@ const daysAgoStr = (n, now) => {
   return dateStr(d)
 }
 
-// 내 운동 기록 요약(운동 이름·부위만 — 무게·횟수·날짜는 보내지 않는다):
+// 내 운동 기록 요약(운동 이름·부위, 그리고 맨몸 운동의 최고 횟수만 — 무게·날짜는 보내지 않는다):
 //  - frequent: 최근 90일에 2번 이상(서로 다른 날) 한 운동 중 많이 한 순 상위 8개의 id → "선호하는 운동"으로 본다
 //  - neglected: 최근 28일에 한 번도 안 쓴 부위 이름(운동한 날이 3일 이상일 때만 판단) → "보강할 부위"
+//  - bodyweightBest: 맨몸 운동별 한 세트 최고 횟수(buildBodyweightBest) → AI가 현실적인 맨몸 반복수를 잡게 하는 상한
 // 근거가 부족하면 null.
 export function buildHistorySummary(logs, exercises, now = new Date()) {
   const done = logs.filter(l => l.isCompleted && l.performedSets?.length)
@@ -105,7 +107,8 @@ export function buildHistorySummary(logs, exercises, now = new Date()) {
     neglected = NEGLECT_PRIORITY.filter(m => !used.has(m)).map(m => MUSCLE_LABELS[m] ?? m)
     neglected = [...new Set(neglected)].slice(0, NEGLECTED_TOP)
   }
-  return frequent.length || neglected.length ? { frequent, neglected } : null
+  const bodyweightBest = buildBodyweightBest(logs, exercises, now)
+  return frequent.length || neglected.length || bodyweightBest.length ? { frequent, neglected, bodyweightBest } : null
 }
 
 // 체형 정보(사용자가 체크했을 때만 조회·전송): 키·몸무게는 가장 최근 신체 기록 → 없으면 "내 정보", 성별·나이는 "내 정보".

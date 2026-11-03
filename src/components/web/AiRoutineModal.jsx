@@ -178,7 +178,7 @@ export default function AiRoutineModal({ onClose, onDraft }) {
     '고른 조건',
     '운동 리스트(이름·부위·장비)',
     include.length > 0 && '꼭 넣을 운동',
-    prefs.useHistory && '자주 한 운동·적게 한 부위(운동 이름·부위만)',
+    prefs.useHistory && '자주 한 운동·적게 한 부위·맨몸 운동 최고 횟수(운동 이름·부위·횟수만)',
     prefs.useBody && '키·몸무게·성별·나이·체지방률(신체 기록에 있으면)',
     prefs.useBody && bodyGoal.hint && '내 목표에서 계산한 방향(감량·증량 등, 목표 숫자는 안 보냄)',
   ]
@@ -290,7 +290,7 @@ export default function AiRoutineModal({ onClose, onDraft }) {
               checked={prefs.useHistory}
               onChange={v => setPref('useHistory', v)}
               title="내 운동 기록 참고"
-              desc="최근 3개월에 자주 한 운동은 선호로, 최근 4주에 안 쓴 부위는 보강 대상으로 봐요. 운동 이름·부위만 보내요."
+              desc="최근 3개월에 자주 한 운동은 선호로, 최근 4주에 안 쓴 부위는 보강 대상으로 봐요. 풀업 같은 맨몸 운동은 내 최고 횟수를 넘지 않게 잡아요. 운동 이름·부위·최고 횟수만 보내요."
             />
             <Toggle
               checked={prefs.useBody}

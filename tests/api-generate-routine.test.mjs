@@ -418,4 +418,33 @@ console.warn = ow2
 const passedLegacy = results.filter(x => x.status === 200).length
 assert.ok(passedLegacy > 10, `예전 방식 통과 ${passedLegacy}개`)
 liveUsage = false; rpcMode = 'ok'
+
+// 16. 맨몸 운동 반복수: 프롬프트 규칙, 내 최고 기록 전달(검증·중복·범위), 최고 기록보다 많은 횟수는 서버가 줄인다
+usageCount = 0; geminiQueue = []; geminiText = goodRoutine
+r = await run({ ...gen, history: { bodyweightBest: [{ id: 'b', reps: 6 }, { id: 'zzz', reps: 5 }, { id: 'b', reps: 9 }, { id: 'e', reps: 0 }, { id: 'c', reps: 500 }, { id: 'd', reps: 'x' }] } })
+assert.equal(r.status, 200)
+up = lastGeminiBody.contents[0].parts[0].text
+assert.match(lastGeminiBody.systemInstruction.parts[0].text, /맨몸 운동.*반복수는 위의 목표별 반복수를 그대로 쓰지 않는다/)
+assert.match(up, /내 맨몸 운동 최고 기록\(한 세트 최대 횟수\): 크런치\(E2\) 6회, 플랭크\(E3\) 100회\n/) // 목록에 없는 id·0회·숫자 아님은 버리고, 중복은 먼저 온 값, 횟수는 100까지
+assert.ok(!up.includes('zzz'))
+// 최고 기록보다 많게 정한 횟수(크런치 12회)는 최고 기록(6회)으로 줄고, 기록이 없는 운동(벤치프레스 8회)은 그대로
+assert.deepEqual(r.json.exercises.map(e => [e.id, e.reps]), [['a', 8], ['b', 6]])
+// 기록이 목표보다 크면(이미 최고 기록 이하) 줄이지 않는다
+geminiText = JSON.stringify({ name: 'n', summary: 's', exercises: [{ id: 'E2', sets: 3, reps: 5, restSeconds: 60, linkedToNext: false }, { id: 'E1', sets: 3, reps: 8, restSeconds: 90, linkedToNext: false }] })
+r = await run({ ...gen, history: { bodyweightBest: [{ id: 'b', reps: 6 }] } })
+assert.deepEqual(r.json.exercises.map(e => [e.id, e.reps]), [['b', 5], ['a', 8]])
+// 최고 기록만 있어도(자주 한 운동·안 쓴 부위 없이) history로 인정된다 / 없으면 줄이 없고 횟수도 그대로
+r = await run({ ...gen, history: { frequent: [], neglected: [], bodyweightBest: [{ id: 'b', reps: 6 }] } })
+assert.match(lastGeminiBody.contents[0].parts[0].text, /내 맨몸 운동 최고 기록/)
+geminiText = goodRoutine
+r = await run({ ...gen, history: { frequent: ['a'] } })
+assert.ok(!lastGeminiBody.contents[0].parts[0].text.includes('내 맨몸 운동 최고 기록'))
+assert.deepEqual(r.json.exercises.map(e => [e.id, e.reps]), [['a', 8], ['b', 12]])
+r = await run({ ...gen, history: { bodyweightBest: 'x' } })
+assert.ok(!lastGeminiBody.contents[0].parts[0].text.includes('내 맨몸 운동 최고 기록'))
+// 20개까지만 받는다
+const many = Array.from({ length: 30 }, (_, i) => ({ id: 'a', reps: i + 1 }))
+r = await run({ ...gen, history: { bodyweightBest: many } })
+assert.match(lastGeminiBody.contents[0].parts[0].text, /벤치프레스\(E1\) 1회\n/) // 같은 id는 한 번만
+console.log('OK: 맨몸 운동 반복수 시나리오 통과')
 console.log(`OK: 한도 원자화 시나리오 통과 (동시 15요청: DB 함수 10개 통과 / 예전 방식 ${passedLegacy}개 통과)`)
