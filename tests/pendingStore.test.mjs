@@ -128,4 +128,36 @@ const memBackend = () => {
   assert.equal(await store.load('u', 't'), null)
 }
 
+// ── 응답이 없는 보관소(IndexedDB가 멈춘 환경): 시간 안에 실패로 처리하고, 그 뒤로는 쓰지 않아 서버 저장 흐름이 막히지 않는다
+{
+  const never = new Promise(() => {})
+  const hung = { get: () => never, set: () => never, del: () => never }
+  const st = createPendingStore(hung, { timeoutMs: 30 })
+  assert.equal(st.available, true)
+  const t0 = Date.now()
+  assert.equal(await st.load('u', 't'), null) // 읽기가 멈춰도 null로 끝난다
+  assert.ok(Date.now() - t0 < 500)
+  assert.equal(st.available, false) // 멈춘 걸 알았으니 이후로는 보관소를 쓰지 않는다
+  const t1 = Date.now()
+  assert.equal(await st.save('u', 't', { changed: [{ id: 'a' }], removedIds: [] }), false) // 기다리지 않고 바로 false
+  assert.equal(await st.load('u', 't'), null)
+  assert.ok(Date.now() - t1 < 20)
+
+  // 동기화기는 멈춘 보관소와 상관없이 서버 저장을 마친다
+  const server = new Map()
+  const client = { from: () => ({ upsert: async rows => { rows.forEach(r => server.set(r.id, r)); return { error: null } }, delete: () => ({ in: async () => ({ error: null }) }) }) }
+  const st2 = createPendingStore(hung, { timeoutMs: 30 })
+  let target = []
+  const syncer = createSyncer({ client, table: 't', toRow: x => x, getTarget: () => target, queue: { current: Promise.resolve() }, store: { save: (t, p) => st2.save('u', t, p) }, onError: () => assert.fail('저장이 실패하면 안 됨'), onSaved: () => {} })
+  syncer.markPersisted([])
+  target = [{ id: 'a', n: 1 }]
+  await syncer.run()
+  assert.deepEqual([...server.keys()], ['a'], '보관소가 멈춰도 서버에는 저장된다')
+  target = [...target, { id: 'b' }]
+  const t2 = Date.now()
+  await syncer.run()
+  assert.equal(server.size, 2)
+  assert.ok(Date.now() - t2 < 50, '두 번째 저장부터는 보관소를 기다리지 않는다')
+}
+
 console.log('OK: 오프라인 보관 전부 통과')

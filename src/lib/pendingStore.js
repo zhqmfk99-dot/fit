@@ -45,21 +45,32 @@ export function idbBackend(idb = globalThis.indexedDB) {
 }
 
 // backend가 null이면 아무것도 보관하지 않는다(available=false).
-export function createPendingStore(backend = idbBackend(), { now = () => Date.now() } = {}) {
+// IndexedDB가 응답하지 않는 환경(일부 브라우저·사생활 보호 모드)에서도 앱이 멈추지 않게, 한 동작이 timeoutMs 안에 안 끝나면 실패로 보고
+// 그 뒤로는 보관소를 아예 쓰지 않는다(저장 흐름이 응답 없는 보관소를 기다리며 서버 저장까지 막히는 일이 없도록).
+export function createPendingStore(backend = idbBackend(), { now = () => Date.now(), timeoutMs = 2000 } = {}) {
   const keyOf = (userId, table) => `${userId}:${table}`
   let chain = Promise.resolve() // 쓰기 순서가 뒤바뀌지 않게 하나씩 처리
+  let broken = false
+
+  const withTimeout = p =>
+    Promise.race([p, new Promise((_, reject) => setTimeout(() => reject(new Error('pending store timeout')), timeoutMs))]).catch(e => {
+      if (/timeout/.test(e?.message)) broken = true
+      throw e
+    })
 
   const enqueue = op => {
-    const result = chain.then(op)
+    const result = chain.then(() => (broken ? Promise.reject(new Error('pending store unavailable')) : withTimeout(op()))) // 앞 동작이 멈췄다고 판정됐으면 줄 서 있던 동작도 기다리지 않고 바로 실패
     chain = result.catch(() => {})
     return result
   }
 
   return {
-    available: !!backend,
+    get available() {
+      return !!backend && !broken
+    },
     // pending이 null이면 지운다. 성공 여부를 돌려주고 던지지 않는다.
     save(userId, table, pending) {
-      if (!backend || !userId) return Promise.resolve(false)
+      if (!backend || broken || !userId) return Promise.resolve(false)
       return enqueue(async () => {
         if (pending) await backend.set(keyOf(userId, table), JSON.stringify({ v: 1, savedAt: now(), changed: pending.changed, removedIds: pending.removedIds }))
         else await backend.del(keyOf(userId, table))
@@ -68,7 +79,7 @@ export function createPendingStore(backend = idbBackend(), { now = () => Date.no
     },
     // 보관된 변경(없거나 형식이 이상하거나 오래됐으면 null)
     load(userId, table) {
-      if (!backend || !userId) return Promise.resolve(null)
+      if (!backend || broken || !userId) return Promise.resolve(null)
       return enqueue(async () => {
         const raw = await backend.get(keyOf(userId, table))
         if (!raw) return null

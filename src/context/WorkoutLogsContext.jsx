@@ -275,7 +275,9 @@ export function WorkoutLogsProvider({ children }) {
       if (cancelled) return
       // 이전에 저장하지 못하고 앱이 종료된 변경이 기기에 보관돼 있으면 읽어 온다(아래에서 서버 값 위에 얹어 다시 올린다)
       const uid = userIdRef.current
-      const [pEx, pRo, pLo, pBo] = await Promise.all(['exercises', 'routines', 'workout_logs', 'body_records'].map(t => pendingStore.load(uid, t)))
+      // 기기 보관소(IndexedDB)가 응답하지 않아도(일부 브라우저·사생활 보호 모드) 앱이 멈추지 않게 3초 안에 못 읽으면 보관본이 없는 것으로 본다
+      const stored = t => Promise.race([pendingStore.load(uid, t), new Promise(resolve => setTimeout(() => resolve(null), 3000))])
+      const [pEx, pRo, pLo, pBo] = await Promise.all(['exercises', 'routines', 'workout_logs', 'body_records'].map(stored))
       if (cancelled) return
       // 신체 기록은 부가 기능이라 조회에 실패해도(테이블 미생성 등) 나머지 데이터는 정상 로드한다
       if (bo.error) console.warn('body_records 조회 실패:', bo.error.message)
@@ -328,11 +330,28 @@ export function WorkoutLogsProvider({ children }) {
       replaceBodyRecords(loadedBodyRecords)
       // 이 시점의 렌더 전이라 ref가 아직 비어 있으므로, 칼로리 채우기에 쓸 체중 출처를 직접 넣어 둔다
       weightSourceRef.current = { ...weightSourceRef.current, bodyRecords: mergedBody, uni: unilateralNames(mergedExercises) }
-      // 보관돼 있던 변경을 서버 값 위에 얹는다 — setX가 \
+      // 보관돼 있던 변경을 서버 값 위에 얹는다 — setX가 "서버 값 → 합친 값" 차이를 다시 올린다. 이미 서버에 반영돼 있었다면 보관본만 지운다.
+      for (const [table, pending, loaded, merged, set] of [
+        ['exercises', pEx, loadedExercises, mergedExercises, setExercises],
+        ['routines', pRo, loadedRoutines, mergedRoutines, setRoutines],
+        ['workout_logs', pLo, loadedLogs, mergedLogs, setLogs],
+        ['body_records', pBo, loadedBodyRecords, mergedBody, setBodyRecords],
+      ]) {
+        if (!pending) continue
+        if (isEmptyDiff(diffOf(loaded, merged))) pendingStore.save(uid, table, null)
+        else set(() => merged)
+      }
+      setLoading(false)
       // 앞으로 2주치 "예정" 기록을 채워 넣고(이미 있으면 건너뜀), 칼로리가 비어 있는 완료 기록(이 기능 이전 기록)은 체중을 알면 채운다
       const scheduled = generateScheduledLogs(mergedRoutines, mergedLogs)
       setLogs(prev => [...scheduled, ...prev])
-    })()
+    })().catch(e => {
+      // 불러오는 도중 예상 못 한 오류가 나도 "불러오는 중"에 영원히 머물지 않고 오류를 보여 준다
+      console.error('데이터 불러오기 실패', e)
+      if (cancelled) return
+      setError(`데이터를 불러오지 못했어요: ${e?.message ?? e}`)
+      setLoading(false)
+    })
     return () => {
       cancelled = true
     }
