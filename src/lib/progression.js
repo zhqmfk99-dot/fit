@@ -9,6 +9,7 @@
 //   1. 계획한 무게보다 가볍게 했다           → 유지 (그 무게로는 평가하지 않는다)
 //   2. 계획한 세트를 다 못 했다              → 유지
 //   3. 어떤 세트가 목표 횟수에 못 미쳤다      → 유지. 같은 무게에서 3번 연속 못 채우면 무게 낮추기(10%)
+//                                              맨몸은 바로 횟수 낮추기: 다음 목표 = 가장 적게 한 세트의 횟수(이후 채우면 +1씩 다시 올림)
 //   4. 피로도 5(매우 힘듦) 또는 체감 "힘들었어요" → 유지
 //   5. 목표는 채웠지만 수행 품질이 나쁘다      → 유지 (아래 "수행 품질")
 //   6. 그 외(목표 달성 + 품질 좋음)           → 무게 올리기. 맨몸(무게 0)은 횟수를 +1
@@ -47,15 +48,17 @@ export const FEEL_KEYS = Object.keys(FEEL_LABELS)
 export const VERDICT_LABELS = {
   'weight-up': '무게 올리기',
   'reps-up': '횟수 늘리기',
+  'reps-down': '횟수 낮추기',
   hold: '유지',
   deload: '무게 낮추기',
 }
 
-// 지금 목표 횟수. 무게가 있는 운동은 루틴의 반복 그대로, 맨몸은 점진 과부하로 올라간 값(progressReps)을 쓴다.
+// 지금 목표 횟수. 무게가 있는 운동은 루틴의 반복 그대로, 맨몸은 앱이 맞춰 둔 값(progressReps)을 쓴다.
+// progressReps는 루틴의 반복보다 낮을 수도 있다(못 채워서 낮춘 경우). 루틴 수정 화면에서 반복을 직접 바꾸면 progressReps는 버려진다.
 export function targetRepsOf(plan) {
   const reps = Number(plan?.reps) || 0
   const p = Number(plan?.progressReps)
-  return Number(plan?.weight) > 0 || !(p > 0) ? reps : Math.max(reps, p)
+  return Number(plan?.weight) > 0 || !(p > 0) ? reps : p
 }
 
 // 화면 표시용 반복 문구
@@ -166,6 +169,12 @@ export function evaluateSession({ log, plan, prevLogs = [], meta, skipRest = fal
   if (sets.length < plannedSets) return hold(`계획한 ${plannedSets}세트를 다 하지 못해서 목표를 그대로 둬요.`)
 
   if (minReps < target) {
+    // 맨몸은 낮출 무게가 없어서 목표 횟수 자체를 해낸 수준(가장 적게 한 세트)으로 맞춘다. 처음 추천이 높았을 때 같은 목표에 계속 막히지 않게 하려는 것이다.
+    // 한 번 낮추면 이후 목표를 채울 때마다 +1씩 다시 올라간다. 연속 미달을 기다리지 않고 바로 맞춘다(무게 운동의 3번 연속 규칙과 다름).
+    if (bodyweight) {
+      const lowered = Math.max(1, minReps)
+      return make('reps-down', `목표 ${target}회에 못 미친 세트가 있었어요(가장 적게 한 세트 ${minReps}회). 다음 목표를 ${lowered}회로 맞춰요. 채우면 다시 하나씩 올려요.`, { sets: plannedSets, reps: lowered, weight: 0 })
+    }
     const streak = missStreak(ww, prevLogs)
     if (!bodyweight && streak >= DELOAD_AFTER_MISSES) {
       const lowered = Math.min(ww - 0.5, Math.round(ww * DELOAD_RATIO * 2) / 2)

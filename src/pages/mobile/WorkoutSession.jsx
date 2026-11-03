@@ -29,6 +29,7 @@ const VERDICT_STYLE = {
   'reps-up': { color: 'text-letusBlue', icon: '▲' },
   hold: { color: 'text-gray-500', icon: '＝' },
   deload: { color: 'text-orange-600', icon: '▼' },
+  'reps-down': { color: 'text-orange-600', icon: '▼' },
 }
 // 체감 난이도 버튼: 고른 것의 색 (표준 색 클래스라 다크 모드가 자동 적용된다)
 const FEEL_ON = {
