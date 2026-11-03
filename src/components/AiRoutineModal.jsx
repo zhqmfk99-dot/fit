@@ -8,7 +8,7 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
 import { buildTagIndex, matchesQuery } from '../lib/exerciseSearch.js'
 import {
-  AI_GOALS, AI_MAX_GOALS, AI_LEVELS, AI_FOCUS, AI_MINUTES, AI_NOTES_MAX, AI_MAX_INCLUDE, AI_MIN_CANDIDATES, AI_MUSCLE_GROUPS, muscleLabel, buildCatalogPayload,
+  AI_GOALS, AI_MAX_GOALS, AI_LEVELS, AI_LEVEL_DESC, AI_FOCUS, AI_MINUTES, AI_NOTES_MAX, AI_MAX_INCLUDE, AI_MIN_CANDIDATES, AI_MUSCLE_GROUPS, muscleLabel, buildCatalogPayload,
 } from '../lib/aiRoutine.js'
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
@@ -208,8 +208,9 @@ export default function AiRoutineModal({ onClose, onDraft }) {
             )}
             {goals.length > 1 && <span className="text-m-caption text-gray-400 leading-relaxed">고른 목표를 운동마다 나눠 섞어서 구성해요. 예) 근비대 + 체지방 감량 → 앞쪽 운동은 근비대, 뒤쪽 운동은 짧은 휴식·수퍼세트.</span>}
           </Field>
-          <Field label="운동 경력">
+          <Field label="운동 경력" hint="기간보다 지금 해낼 수 있는 수준 기준 · 헷갈리면 낮은 쪽">
             <Pills options={AI_LEVELS} value={level} onChange={setLevel} />
+            <span className="text-m-caption text-gray-500 leading-relaxed">{AI_LEVEL_DESC[level]}</span>
           </Field>
           <Field label="운동 시간">
             <Pills options={AI_MINUTES} value={minutes} onChange={setMinutes} format={m => `${m}분`} />
