@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, CalendarClock, Play } from 'lucide-react'
+import { ChevronDown, CalendarClock, Play, Trash2 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import WorkoutFormModal from '../components/web/WorkoutFormModal.jsx'
 import BodyRecordModal from '../components/BodyRecordModal.jsx'
@@ -41,6 +41,7 @@ export default function WorkoutLog() {
     openCreate,
     openEdit,
     handleDelete,
+    deleteGroupPending,
     toggleComplete,
     restoreSkipped,
     handleModalSave,
@@ -281,13 +282,27 @@ export default function WorkoutLog() {
                     <div className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors">
                       <button onClick={() => toggleExpand(group.routineId)} className="flex items-center gap-2 min-w-0 flex-1 text-left">
                         <ChevronDown className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        <span className="text-ui-body font-bold text-gray-800 truncate">{routine?.name || '루틴'}</span>
+                        <span className={`text-ui-body font-bold truncate ${routine ? 'text-gray-800' : 'text-gray-400'}`}>{routine?.name || '삭제된 루틴'}</span>
                         <span className="text-ui-caption font-bold text-gray-400 shrink-0">
                           {completedCount}/{group.logs.length} 완료{skippedCount > 0 && ` · 건너뜀 ${skippedCount}`}
                         </span>
                       </button>
 
                       <div className="flex items-center gap-1 shrink-0">
+                        {/* 이미 지운 루틴에서 남은 예정 기록은 묶음째 지울 수 있다(완료한 기록은 남는다) */}
+                        {!routine && group.logs.some(l => !l.isCompleted) && (
+                          <button
+                            onClick={e => {
+                              e.stopPropagation()
+                              deleteGroupPending(group.routineId, groupDate)
+                            }}
+                            className="flex items-center gap-1 text-ui-caption font-bold text-red-500 hover:text-red-600 px-1.5 py-1 rounded hover:bg-white transition-colors"
+                            title="삭제된 루틴에서 남은 예정 기록 지우기"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            예정 기록 삭제
+                          </button>
+                        )}
                         <button
                           onClick={e => {
                             e.stopPropagation()

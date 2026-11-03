@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../lib/workoutMetrics.js'
+import { pendingInGroup, withoutPendingInGroup } from '../lib/routineCleanup.js'
 
 export const getLocalDateString = d => {
   const pad = n => String(n).padStart(2, '0')
@@ -115,6 +116,13 @@ export function useWorkoutLog() {
     if (!confirm('이 기록을 삭제할까요?')) return
     setLogs(prev => prev.filter(l => l.id !== id))
   }
+  // 삭제된 루틴에서 남은 예정 기록 묶음(같은 루틴·같은 날짜)을 한 번에 지운다. 이미 완료한 기록은 남는다. (lib/routineCleanup.js)
+  const deleteGroupPending = (routineId, date) => {
+    const n = pendingInGroup(logs, routineId, date).length
+    if (!n) return
+    if (!confirm(`삭제된 루틴에서 남은 예정 기록 ${n}개를 지울까요?\n(이미 한 기록은 그대로 남아요.)`)) return
+    setLogs(prev => withoutPendingInGroup(prev, routineId, date))
+  }
   const toggleComplete = id => {
     setLogs(prev =>
       prev.map(l => {
@@ -172,6 +180,7 @@ export function useWorkoutLog() {
     openCreate,
     openEdit,
     handleDelete,
+    deleteGroupPending,
     toggleComplete,
     restoreSkipped,
     handleModalSave,

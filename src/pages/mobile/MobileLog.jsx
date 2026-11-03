@@ -53,6 +53,7 @@ export default function MobileLog() {
     openCreate,
     openEdit,
     handleDelete,
+    deleteGroupPending,
     toggleComplete,
     restoreSkipped,
     handleModalSave,
@@ -242,7 +243,7 @@ export default function MobileLog() {
               <div key={group.routineId} className="border border-gray-100 rounded-lg overflow-hidden bg-white">
                 <button onClick={() => toggleExpand(group.routineId)} className="w-full flex items-center gap-2 px-3 py-3 bg-slate-50 text-left">
                   <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                  <span className="text-m-body font-bold text-gray-800 truncate flex-1">{routine?.name || '루틴'}</span>
+                  <span className={`text-m-body font-bold truncate flex-1 ${routine ? 'text-gray-800' : 'text-gray-400'}`}>{routine?.name || '삭제된 루틴'}</span>
                   <span className="text-m-caption font-bold text-gray-400 shrink-0">
                     {completedCount}/{group.logs.length} 완료{skippedCount > 0 && ` · 건너뜀 ${skippedCount}`}
                   </span>
@@ -256,6 +257,16 @@ export default function MobileLog() {
                     <CalendarClock className="w-4 h-4" />
                     날짜 변경
                   </button>
+                  {/* 이미 지운 루틴에서 남은 예정 기록은 묶음째 지울 수 있다(완료한 기록은 남는다) */}
+                  {!routine && group.logs.some(l => !l.isCompleted) && (
+                    <button
+                      onClick={() => deleteGroupPending(group.routineId, groupDate)}
+                      className="flex items-center gap-1 text-m-caption font-bold text-red-500 px-3 py-2 rounded-lg bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      예정 기록 삭제
+                    </button>
+                  )}
                   {hasPending && (
                     <button
                       onClick={() => navigate(`/mobile/session?routineId=${group.routineId}&date=${groupDate}`)}
