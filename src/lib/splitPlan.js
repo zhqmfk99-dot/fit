@@ -130,11 +130,17 @@ export function pickDay(groups, catalog, logs, { perDay = DEFAULT_PER_DAY, myEqu
   return [...picked].sort((a, b) => Number(isCompound(b.exercise)) - Number(isCompound(a.exercise)) || idx.get(a) - idx.get(b))
 }
 
+// 휴식은 설정의 "기본 휴식 시간"(baseRest)을 기준으로 운동 종류별로 얹거나 뺀다: 기구 복합관절 +30초, 맨몸 복합관절 ±0, 단관절 −30초, 코어 −45초.
+// 기본값 90초일 때 예전 고정값(120·90·60·45초)과 같다. 5초 단위, 30~300초.
+export const SPLIT_BASE_REST = 90
+const restFrom = (base, offset) => Math.min(300, Math.max(30, Math.round((base + offset) / 5) * 5))
+
 // 운동 하나의 기본 세트·횟수·휴식
-export function defaultsFor(e, group) {
-  if (group === '코어') return { sets: 3, reps: 15, restSeconds: 45 }
-  if (isCompound(e)) return e.equipment === '맨몸' ? { sets: 3, reps: 10, restSeconds: 90 } : { sets: 3, reps: 8, restSeconds: 120 }
-  return { sets: 3, reps: 12, restSeconds: 60 }
+export function defaultsFor(e, group, baseRest = SPLIT_BASE_REST) {
+  const base = Number.isFinite(Number(baseRest)) && Number(baseRest) > 0 ? Number(baseRest) : SPLIT_BASE_REST
+  if (group === '코어') return { sets: 3, reps: 15, restSeconds: restFrom(base, -45) }
+  if (isCompound(e)) return e.equipment === '맨몸' ? { sets: 3, reps: 10, restSeconds: restFrom(base, 0) } : { sets: 3, reps: 8, restSeconds: restFrom(base, 30) }
+  return { sets: 3, reps: 12, restSeconds: restFrom(base, -30) }
 }
 
 // 분할 전체 계획: [{ label, groups, items: [{ exercise, sets, reps, restSeconds, weight(number|null), equipment, needsWeight, unilateral }] }]
@@ -145,7 +151,7 @@ export function planSplit(preset, catalog, logs, opts = {}) {
     groups: day.groups,
     items: pickDay(day.groups, catalog, logs, opts).map(({ exercise: e, group }) => {
       const weight = lastWeightFor(e.name, logs)
-      return { exercise: e.name, ...defaultsFor(e, group), weight, equipment: e.equipment || '', needsWeight: weight == null && e.equipment !== '맨몸', unilateral: !!e.unilateral }
+      return { exercise: e.name, ...defaultsFor(e, group, opts.baseRest), weight, equipment: e.equipment || '', needsWeight: weight == null && e.equipment !== '맨몸', unilateral: !!e.unilateral }
     }),
   }))
 }

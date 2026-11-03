@@ -24,8 +24,8 @@ export function useSplitPlanner() {
   const preset = presets.find(p => p.id === presetId) ?? null
 
   const plan = useMemo(
-    () => (preset ? planSplit(preset, exercises, logs, { perDay, myEquipment: settings.myEquipment ?? [], now: new Date() }) : []),
-    [preset, exercises, logs, perDay, settings.myEquipment],
+    () => (preset ? planSplit(preset, exercises, logs, { perDay, myEquipment: settings.myEquipment ?? [], baseRest: settings.defaultRestSeconds, now: new Date() }) : []),
+    [preset, exercises, logs, perDay, settings.myEquipment, settings.defaultRestSeconds],
   )
 
   const choose = id => {

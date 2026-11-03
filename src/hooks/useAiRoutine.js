@@ -5,7 +5,7 @@ import { requestRoutineDraft, buildRoutineDraft, buildHistorySummary, fetchBodyI
 
 // AI 루틴 만들어주기 모달(웹앱·PWA)이 같이 쓰는 상태·로직. 화면(렌더링)만 따로 둔다.
 // generate(conditions, repeatDays, options) → 성공하면 루틴 초안, 실패하면 error에 문구를 두고 null.
-//   options: { include: 꼭 넣을 운동 id[], avoid: 빼고 싶은 운동 id[], useHistory: 내 운동 기록 참고, useBody: 체형 정보 전송, goalHint: 내 목표에서 계산한 방향·크기(체형 정보 전송을 켰을 때만 함께 보낸다) }
+//   options: { include: 꼭 넣을 운동 id[], avoid: 빼고 싶은 운동 id[], useHistory: 내 운동 기록 참고, useBody: 체형 정보 전송, defaultRest: 설정의 기본 휴식 시간(초), goalHint: 내 목표에서 계산한 방향·크기(체형 정보 전송을 켰을 때만 함께 보낸다) }
 export function useAiRoutine() {
   const { exercises, logs, bodyRecords } = useWorkoutLogs()
   const { user } = useAuth()
@@ -21,7 +21,7 @@ export function useAiRoutine() {
     setLoading(true)
     setError('')
     try {
-      const extra = { include: options.include || [], avoid: options.avoid || [] }
+      const extra = { include: options.include || [], avoid: options.avoid || [], defaultRest: options.defaultRest }
       if (options.useHistory) extra.history = buildHistorySummary(logs, exercises)
       if (options.useBody) {
         extra.body = await fetchBodyInfo(user.id, bodyRecords, options.goalHint)
@@ -31,7 +31,7 @@ export function useAiRoutine() {
       const draft = buildRoutineDraft(result, exercises, logs, repeatDays)
       if (!draft.exercises.length) throw new Error('고른 장비로 만들 수 있는 운동이 부족해요. 장비 선택을 넓혀 보세요.')
       // 수정 요청(다듬기)에서 같은 조건으로 다시 부를 수 있게 이 초안을 만든 조건을 담아 둔다(저장되지는 않는다)
-      draft.request = { conditions, extra: { avoid: extra.avoid, history: extra.history, body: extra.body } }
+      draft.request = { conditions, extra: { avoid: extra.avoid, history: extra.history, body: extra.body, defaultRest: extra.defaultRest } }
       return draft
     } catch (e) {
       setError(e.message || 'AI 루틴 생성에 실패했어요.')

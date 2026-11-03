@@ -31,6 +31,8 @@ const MAX_EXERCISES_BY_MINUTES = { 30: 5, 45: 6, 60: 8, 90: 10 }
 const MAX_CATALOG = 300
 const MAX_INCLUDE = 5
 const MAX_BODYWEIGHT_BEST = 20 // 내 맨몸 운동 최고 기록으로 받는 운동 수
+const MAX_OVERWORKED = 4 // 클라이언트 lib/recentPerformance.js의 OVERWORKED_TOP과 같아야 한다
+const MAX_STRUGGLING = 8 // 클라이언트의 STRUGGLING_TOP과 같아야 한다
 const MAX_CURRENT = 12// 수정 요청에 실을 수 있는 현재 루틴의 운동 수
 const MAX_INSTRUCTION = 200
 
@@ -49,6 +51,7 @@ const SYSTEM_PROMPT = `너는 웨이트 트레이닝 루틴을 짜는 보조자�
 - 경력 기준(기간이 아니라 지금 해낼 수 있는 수준이 우선): 초보 = 시작 6개월 안팎이거나 오래 쉬었다 복귀, 자세·기구 사용법을 익히는 단계(풀업 0~3회쯤). 중급 = 주 2~3회 6개월~2년, 주요 운동 자세가 안정되고 무게를 늘려 온 단계(풀업 5~10회쯤). 상급 = 2년 이상, 내 한계에 맞춰 무게·볼륨을 조절하는 단계(풀업 10회 이상이거나 중량). 경력이 낮을수록 운동 수·세트·난이도를 보수적으로 잡는다.
 - 목표별 반복수: 근력 3~6회, 근비대 8~12회, 체지방 감량·체력 유지 12~15회. 세트는 2~5개(초보는 2~3개).
 - 휴식(초): 복합관절 90~180, 단관절 45~90. 근력 목표는 길게.
+- **"기본 휴식 시간"이 있으면 위 범위보다 그것을 기준으로 한다**(사용자가 설정에서 정한 평소 휴식이다). 단관절·고립·코어 운동은 기본값 그대로, 복합관절은 기본값보다 0~30초 길게(근력 목표를 포함하면 최대 60초까지), 체지방 감량이 중심이면 기본값 이하로 정한다. 기본값이 60초인데 모든 운동을 90초 이상으로 정하지 않는다.
 - 목표가 여러 개면 하나를 고르지 말고 **모든 목표가 루틴에 드러나게 섞는다**. 운동마다 다른 목표 범위를 배분한다. 예) 근비대+체지방 감량: 앞쪽 큰 근육 복합관절 운동은 8~12회로 근비대 자극을 주고, 뒤쪽 운동·단관절·코어는 12~15회에 휴식을 45~60초로 줄이며, 반대 근육 수퍼세트를 적극 써서 운동 밀도를 높인다. 근력+다른 목표면 첫 한두 운동만 3~6회·긴 휴식으로 하고 나머지는 다른 목표를 따른다. 체지방 감량은 식단·체지방 감소를 약속하는 말을 하지 않는다(summary에서 목표들을 어떻게 섞었는지만 설명).
 - 수퍼세트(linkedToNext=true)는 서로 반대 근육을 쓰는 인접한 두 운동에만, 꼭 필요할 때만 쓴다. 마지막 운동은 항상 false.
 - 선택한 집중 부위에 맞는 운동 위주로 고른다. 집중 부위가 여러 개면 비중을 나눠 고르게 배분하고, 세부 부위가 지정되면 그 부위들을 골고루 다룬다.
@@ -62,6 +65,8 @@ const SYSTEM_PROMPT = `너는 웨이트 트레이닝 루틴을 짜는 보조자�
   summary에는 이 보정 때문에 체형·체지방률을 언급·평가하지 않는다(맨몸 운동을 몇 회로 잡았는지만 써도 된다).
 - "자주 한 운동"은 사용자가 좋아하는 운동이다. 같은 운동만 반복하지 않는 선에서 우선 고려한다.
 - "최근 적게 한 부위"가 집중 부위와 겹치면 그 부위 운동을 보강한다.
+- "최근 피로가 높은 부위"는 회복이 덜 된 부위다. 집중 부위에 없으면 그 부위가 주인 운동은 피하거나 최소로 하고, 집중 부위에 들어 있으면 운동 수와 세트(2~3세트)를 줄이고 부담이 작은 운동 위주로 고른다. summary에서 피로나 컨디션을 평가하지 않는다.
+- "최근 목표 횟수를 못 채운 운동"은 직전 두 번 모두 목표를 못 채웠다는 뜻이라 지금 수준보다 높게 잡혀 있었다. 넣을 때는 반복수를 목표 범위의 낮은 쪽으로 낮추고 세트를 2~3개로 하거나, 목록에 더 쉬운 비슷한 운동이 있으면 그쪽을 우선한다(꼭 넣을 운동으로 지정된 것은 넣되 반복수만 낮춘다).
 - "체형" 정보가 있으면 운동 선택과 강도 조절(예: 체중이 많이 나가거나 나이가 많거나 초보면 관절 부담이 적은 운동 우선)에만 참고한다. 체형이나 체중에 대한 평가, 진단, 식단 조언은 하지 않는다.
 - "내 목표" 정보가 있고 **목표가 여러 개**이면 그 방향을 가장 우선해 목표를 섞는 비중을 정한다(체지방률보다 우선). 감량 필요 '큼'이면 체지방 감량 쪽(높은 반복·짧은 휴식·수퍼세트) 비중을 크게, '보통'이면 균형 있게, 증량이면 근비대·근력 쪽(8~12회·충분한 휴식) 비중을 크게, 재구성이면 근비대와 체지방 감량을 균형 있게, 유지면 근비대·근력과 체력 유지를 고르게 섞는다. 감량 중에도 큰 복합관절 운동은 빼지 않는다. 목표가 하나면 그 목표를 그대로 따르고, summary에는 목표 숫자나 체형을 언급·평가하지 않는다.
 - 체형에 "체지방률"이 있고 "내 목표" 정보는 없으며 **목표가 여러 개**이면, 목표를 섞는 비중을 정할 때 참고한다. 체지방률이 성별·나이 기준으로 높은 편이면 체지방 감량 쪽(높은 반복·짧은 휴식·수퍼세트) 비중을 키우고, 낮은 편이면 근비대·근력 쪽 비중을 키운다. 기준은 일반적으로 알려진 범위 상식을 따르고, 성별·나이가 없으면 중간 정도로 섞는다. 목표가 하나면 그 목표를 그대로 따른다. summary에는 체지방률 수치나 체형을 언급·평가하지 않고 목표를 어떻게 섞었는지만 쓴다.
@@ -233,7 +238,10 @@ function parseInput(body) {
       .map(b => ({ id: str(b?.id, 64), reps: clampInt(b.reps, 1, 100, 1) }))
       .filter((b, i, a) => ids.has(b.id) && a.findIndex(x => x.id === b.id) === i)
       .slice(0, MAX_BODYWEIGHT_BEST)
-    if (frequent.length || neglected.length || bodyweightBest.length) history = { frequent, neglected, bodyweightBest }
+    // 최근 수행 요약: 피로가 높은 부위 이름(근육 이름만), 직전 두 번 목표 횟수를 못 채운 운동 id
+    const overworked = Array.isArray(body.history.overworked) ? [...new Set(body.history.overworked.map(m => str(m, 10)).filter(Boolean))].slice(0, MAX_OVERWORKED) : []
+    const struggling = Array.isArray(body.history.struggling) ? [...new Set(body.history.struggling.map(i => str(i, 64)).filter(i => ids.has(i)))].slice(0, MAX_STRUGGLING) : []
+    if (frequent.length || neglected.length || bodyweightBest.length || overworked.length || struggling.length) history = { frequent, neglected, bodyweightBest, overworked, struggling }
   }
 
   // 체형 정보(선택): 범위를 벗어난 값은 버린다
@@ -264,7 +272,11 @@ function parseInput(body) {
     if (!instruction || !current.length) return null
   }
 
-  return { goals, level, focus, muscles, minutes, notes: str(body.notes, 200), exercises, include, history, body: bodyInfo, current, instruction }
+  // 설정의 기본 휴식 시간(초): 15~300 범위의 숫자만, 5초 단위로 맞춘다(아니면 없음)
+  const restN = Number(body.defaultRest)
+  const defaultRest = Number.isFinite(restN) && restN >= 15 && restN <= 300 ? Math.round(restN / 5) * 5 : null
+
+  return { goals, level, focus, muscles, minutes, notes: str(body.notes, 200), exercises, include, history, body: bodyInfo, defaultRest, current, instruction }
 }
 
 // 운동 시간별 최대 개수. 수정 모드에서는 현재 루틴이 그보다 길어도 줄이라고 하기 전에는 유지할 수 있게 현재 개수까지 허용한다.
@@ -289,6 +301,9 @@ function buildUserPrompt(input) {
   if (input.include.length) lines.push(`꼭 넣을 운동: ${input.include.map(id => `${nameOf(id)}(${codeOf(input, id)})`).join(', ')}`)
   if (input.history?.frequent.length) lines.push(`자주 한 운동(선호): ${input.history.frequent.map(nameOf).join(', ')}`)
   if (input.history?.neglected.length) lines.push(`최근 4주간 적게 한 부위: ${input.history.neglected.join(', ')}`)
+  if (input.defaultRest) lines.push(`기본 휴식 시간: ${input.defaultRest}초`)
+  if (input.history?.overworked?.length) lines.push(`최근 피로가 높은 부위: ${input.history.overworked.join(', ')}`)
+  if (input.history?.struggling?.length) lines.push(`최근 목표 횟수를 못 채운 운동(직전 두 번 연속): ${input.history.struggling.map(id => `${nameOf(id)}(${codeOf(input, id)})`).join(', ')}`)
   if (input.history?.bodyweightBest?.length) lines.push(`내 맨몸 운동 최고 기록(한 세트 최대 횟수): ${input.history.bodyweightBest.map(b => `${nameOf(b.id)}(${codeOf(input, b.id)}) ${b.reps}회`).join(', ')}`)
   if (input.body) {
     const b = input.body

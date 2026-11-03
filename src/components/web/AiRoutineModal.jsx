@@ -169,6 +169,7 @@ export default function AiRoutineModal({ onClose, onDraft }) {
       useHistory: prefs.useHistory,
       useBody: prefs.useBody,
       goalHint: bodyGoal.hint,
+      defaultRest: settings.defaultRestSeconds,
     })
     if (draft) onDraft(draft)
   }
@@ -176,9 +177,10 @@ export default function AiRoutineModal({ onClose, onDraft }) {
   // 지금 설정에서 Gemini로 실제로 나가는 정보를 그대로 안내한다
   const sendsText = [
     '고른 조건',
+    `기본 휴식 시간(${settings.defaultRestSeconds}초)`,
     '운동 리스트(이름·부위·장비)',
     include.length > 0 && '꼭 넣을 운동',
-    prefs.useHistory && '자주 한 운동·적게 한 부위·맨몸 운동 최고 횟수(운동 이름·부위·횟수만)',
+    prefs.useHistory && '자주 한 운동·적게 한 부위·피로가 높은 부위·목표를 못 채운 운동·맨몸 운동 최고 횟수(이름·부위·횟수만)',
     prefs.useBody && '키·몸무게·성별·나이·체지방률(신체 기록에 있으면)',
     prefs.useBody && bodyGoal.hint && '내 목표에서 계산한 방향(감량·증량 등, 목표 숫자는 안 보냄)',
   ]
@@ -291,7 +293,7 @@ export default function AiRoutineModal({ onClose, onDraft }) {
               checked={prefs.useHistory}
               onChange={v => setPref('useHistory', v)}
               title="내 운동 기록 참고"
-              desc="최근 3개월에 자주 한 운동은 선호로, 최근 4주에 안 쓴 부위는 보강 대상으로 봐요. 풀업 같은 맨몸 운동은 내 최고 횟수를 넘지 않게 잡아요. 운동 이름·부위·최고 횟수만 보내요."
+              desc="최근 3개월에 자주 한 운동은 선호로, 최근 4주에 안 쓴 부위는 보강 대상으로 봐요. 풀업 같은 맨몸 운동은 내 최고 횟수를 넘지 않게 잡고, 최근 피로가 높은 부위와 목표를 두 번 연속 못 채운 운동은 줄여서 잡아요. 운동 이름·부위·최고 횟수만 보내요."
             />
             <Toggle
               checked={prefs.useBody}

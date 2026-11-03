@@ -447,4 +447,33 @@ const many = Array.from({ length: 30 }, (_, i) => ({ id: 'a', reps: i + 1 }))
 r = await run({ ...gen, history: { bodyweightBest: many } })
 assert.match(lastGeminiBody.contents[0].parts[0].text, /벤치프레스\(E1\) 1회\n/) // 같은 id는 한 번만
 console.log('OK: 맨몸 운동 반복수 시나리오 통과')
+
+// 17. 기본 휴식 시간·최근 수행 요약(피로가 높은 부위, 목표를 못 채운 운동)
+geminiText = goodRoutine
+{
+  const promptOf = () => lastGeminiBody.contents[0].parts[0].text
+  r = await run({ ...gen, defaultRest: 60 })
+  assert.equal(r.status, 200)
+  assert.match(promptOf(), /\n기본 휴식 시간: 60초\n/)
+  assert.match(lastGeminiBody.systemInstruction.parts[0].text, /"기본 휴식 시간"이 있으면 위 범위보다 그것을 기준으로/)
+  await run({ ...gen, defaultRest: 62 }); assert.match(promptOf(), /기본 휴식 시간: 60초/) // 5초 단위로 맞춘다
+  for (const bad of [5, 500, 'x', null, undefined, NaN]) {
+    await run({ ...gen, defaultRest: bad })
+    assert.ok(!promptOf().includes('기본 휴식 시간'), `잘못된 값 ${bad}`)
+  }
+
+  r = await run({ ...gen, history: { overworked: ['가슴', '삼두', '가슴', '', '이두', '대퇴사두', '둔근'], struggling: ['a', 'zzz', 'a', 'c'] } })
+  assert.equal(r.status, 200)
+  assert.match(promptOf(), /\n최근 피로가 높은 부위: 가슴, 삼두, 이두, 대퇴사두\n/) // 중복·빈 값 제거, 4개까지
+  assert.match(promptOf(), /\n최근 목표 횟수를 못 채운 운동\(직전 두 번 연속\): 벤치프레스\(E1\), 플랭크\(E3\)\n/) // 목록에 없는 id·중복 제거
+  assert.match(lastGeminiBody.systemInstruction.parts[0].text, /"최근 피로가 높은 부위"는 회복이 덜 된 부위/)
+  assert.match(lastGeminiBody.systemInstruction.parts[0].text, /"최근 목표 횟수를 못 채운 운동"은 직전 두 번 모두/)
+  // 둘 중 하나만 있어도 history로 인정되고, 없거나 이상한 값이면 줄이 없다
+  await run({ ...gen, history: { overworked: ['가슴'] } }); assert.match(promptOf(), /최근 피로가 높은 부위: 가슴/); assert.ok(!promptOf().includes('못 채운 운동'))
+  await run({ ...gen, history: { struggling: ['b'] } }); assert.match(promptOf(), /못 채운 운동\(직전 두 번 연속\): 크런치\(E2\)/); assert.ok(!promptOf().includes('피로가 높은 부위:'))
+  await run({ ...gen, history: { overworked: 'x', struggling: 'y' } }); assert.ok(!promptOf().includes('피로가 높은 부위:') && !promptOf().includes('못 채운 운동('))
+  // 수정 요청 모드에서도 같은 값이 간다
+  await run({ ...gen, defaultRest: 45, current: [{ id: 'a' }], instruction: '줄여 주세요' }); assert.match(promptOf(), /기본 휴식 시간: 45초/)
+}
+console.log('OK: 기본 휴식·최근 수행 요약 시나리오 통과')
 console.log(`OK: 한도 원자화 시나리오 통과 (동시 15요청: DB 함수 10개 통과 / 예전 방식 ${passedLegacy}개 통과)`)

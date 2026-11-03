@@ -101,6 +101,23 @@ assert.deepEqual(defaultsFor(catalog[0], '가슴'), { sets: 3, reps: 8, restSeco
 assert.deepEqual(defaultsFor(catalog[2], '가슴'), { sets: 3, reps: 10, restSeconds: 90 })
 assert.deepEqual(defaultsFor(catalog[3], '가슴'), { sets: 3, reps: 12, restSeconds: 60 })
 assert.deepEqual(defaultsFor(catalog[17], '코어'), { sets: 3, reps: 15, restSeconds: 45 })
+// 설정의 기본 휴식 시간을 기준으로: 기구 복합 +30, 맨몸 복합 ±0, 단관절 −30, 코어 −45 (5초 단위, 30~300초). 기본값 90이면 위와 같다.
+assert.deepEqual(defaultsFor(catalog[0], '가슴', 90), defaultsFor(catalog[0], '가슴'))
+const restsAt = base => [catalog[0], catalog[2], catalog[3]].map(e => defaultsFor(e, '가슴', base).restSeconds).concat(defaultsFor(catalog[17], '코어', base).restSeconds)
+assert.deepEqual(restsAt(60), [90, 60, 30, 30])   // 단관절 30, 코어는 15가 되지만 30초 밑으로는 안 내린다
+assert.deepEqual(restsAt(120), [150, 120, 90, 75])
+assert.deepEqual(restsAt(290), [300, 290, 260, 245]) // 300초 상한
+assert.deepEqual(restsAt(62), [90, 60, 30, 30])      // 5초 단위로 맞춘다(62+30=92→90)
+assert.equal(defaultsFor(catalog[0], '가슴', 'x').restSeconds, 120) // 이상한 값은 90초 기준
+assert.equal(defaultsFor(catalog[0], '가슴', 0).restSeconds, 120)
+// planSplit에 baseRest를 넘기면 계획의 휴식이 따라간다
+{
+  const p60 = planSplit(BUILTIN_PRESETS[0], catalog, [], { now: NOW, baseRest: 60 })
+  const p90 = planSplit(BUILTIN_PRESETS[0], catalog, [], { now: NOW })
+  assert.ok(p60.flatMap(d => d.items).every(it => it.restSeconds >= 30 && it.restSeconds <= 90), '60초 기준이면 휴식이 90초 이하')
+  assert.ok(Math.max(...p90.flatMap(d => d.items).map(it => it.restSeconds)) >= 120)
+  assert.deepEqual(p60.map(d => d.items.map(i => i.exercise)), p90.map(d => d.items.map(i => i.exercise))) // 운동 고르기는 그대로
+}
 
 // 분할 전체: 날마다 루틴 이름·부위, 무게는 마지막 기록, 기록 없는 장비 운동은 needsWeight
 {

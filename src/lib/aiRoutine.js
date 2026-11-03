@@ -7,6 +7,7 @@ import { MUSCLE_LABELS, UPPER_BODY_MUSCLES, LOWER_BODY_MUSCLES } from './muscleM
 import { calcBmi } from './bodyMetrics.js'
 import { lastWeightFor } from './lastWeight.js'
 import { buildBodyweightBest } from './bodyweightBest.js'
+import { overworkedMuscles, strugglingExercises } from './recentPerformance.js'
 
 export const AI_GOALS = ['근비대', '근력', '체지방 감량', '체력 유지']
 export const AI_MAX_GOALS = 3 // 목표는 여러 개 고를 수 있다(서버 MAX_GOALS와 같아야 한다). 여러 개면 AI가 운동마다 나눠 섞는다.
@@ -88,6 +89,8 @@ const daysAgoStr = (n, now) => {
 //  - frequent: 최근 90일에 2번 이상(서로 다른 날) 한 운동 중 많이 한 순 상위 8개의 id → "선호하는 운동"으로 본다
 //  - neglected: 최근 28일에 한 번도 안 쓴 부위 이름(운동한 날이 3일 이상일 때만 판단) → "보강할 부위"
 //  - bodyweightBest: 맨몸 운동별 한 세트 최고 횟수(buildBodyweightBest) → AI가 현실적인 맨몸 반복수를 잡게 하는 상한
+//  - overworked: 최근 3일 안에 했고 근육 피로도가 높은 부위 이름(lib/recentPerformance.js) → 새 루틴에서 그 부위를 줄이게 한다
+//  - struggling: 직전 두 번 연속 목표 횟수를 못 채운 운동 id → 그 운동은 낮게 잡거나 쉬운 운동으로 바꾸게 한다
 // 근거가 부족하면 null.
 export function buildHistorySummary(logs, exercises, now = new Date()) {
   const done = logs.filter(l => l.isCompleted && l.performedSets?.length)
@@ -115,7 +118,9 @@ export function buildHistorySummary(logs, exercises, now = new Date()) {
     neglected = [...new Set(neglected)].slice(0, NEGLECTED_TOP)
   }
   const bodyweightBest = buildBodyweightBest(logs, exercises, now)
-  return frequent.length || neglected.length || bodyweightBest.length ? { frequent, neglected, bodyweightBest } : null
+  const overworked = overworkedMuscles(logs, exercises, now)
+  const struggling = strugglingExercises(logs, exercises, now)
+  return frequent.length || neglected.length || bodyweightBest.length || overworked.length || struggling.length ? { frequent, neglected, bodyweightBest, overworked, struggling } : null
 }
 
 // 체형 정보(사용자가 체크했을 때만 조회·전송): 키·몸무게는 가장 최근 신체 기록 → 없으면 "내 정보", 성별·나이는 "내 정보".
@@ -168,6 +173,7 @@ export async function requestRoutineDraft(conditions, exercises, extra = {}) {
     instruction: extra.instruction || undefined,
     history: extra.history || null,
     body: extra.body || null,
+    defaultRest: extra.defaultRest || undefined, // 설정의 기본 휴식 시간(초) — AI가 운동별 휴식을 이 값을 기준으로 정한다
   }, 'AI 루틴 생성에 실패했어요.')
 }
 
