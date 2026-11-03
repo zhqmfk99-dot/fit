@@ -117,6 +117,64 @@ assert.equal(ev(base([set(8), set(8)], { targetSets: 3, feel: 'easy' })).verdict
   assert.equal(targetRepsOf({ reps: 10, weight: 0, progressReps: undefined }), 10)
 }
 
+// "힘들었어요"가 같은 계획으로 두 번 연속이면 세트를 1개 줄인다(최소 2세트)
+{
+  const hardPrev = (extra = {}) => [{ performedSets: [set(8), set(8), set(8)], targetReps: 8, targetSets: 3, feel: 'hard', date: '2026-01-01', ...extra }]
+  const log = base(good, { feel: 'hard' })
+  assert.equal(ev(log).verdict, 'hold') // 처음 힘들었어요는 유지
+  const r = ev(log, { prevLogs: hardPrev() })
+  assert.equal(r.verdict, 'sets-down')
+  assert.equal(r.label, '세트 줄이기')
+  assert.deepEqual(r.next, { sets: 2, reps: 8, weight: 60 })
+  assert.match(r.reason, /두 번 연속.*2개/)
+  assert.equal(ev(log, { prevLogs: hardPrev({ feel: 'ok' }) }).verdict, 'hold')            // 직전이 힘들지 않았으면 유지
+  assert.equal(ev(log, { prevLogs: hardPrev({ targetSets: 4 }) }).verdict, 'hold')          // 계획이 바뀐 뒤에는 새로 센다
+  assert.equal(ev(base([set(8), set(8)], { feel: 'hard' }), { prevLogs: hardPrev({ targetSets: 2 }) }).verdict, 'hold') // 2세트 밑으로는 안 줄인다
+  assert.equal(ev(base(good, { feel: 'easy' }), { prevLogs: hardPrev() }).verdict, 'weight-up') // 이번에 쉬웠으면 해당 없음
+  // 목표 미달이면 미달 규칙이 먼저
+  assert.equal(ev(base([set(8), set(8), set(6)], { feel: 'hard' }), { prevLogs: hardPrev() }).verdict, 'hold')
+}
+
+// 계획 휴식 보정: 같은 계획 휴식으로 연속 3번, 세 번 모두 실제 휴식이 계획과 뚜렷이 다를 때
+{
+  const timed = gap => [0, 1, 2].map(i => set(8, 60, { startedAt: i * (30 + gap) * 1000, endedAt: (i * (30 + gap) + 30) * 1000 }))
+  const prevOf = (gap, n = 2, rest = 90) => Array.from({ length: n }, (_, i) => ({ performedSets: timed(gap), targetReps: 8, restSeconds: rest, date: `2026-01-0${i + 1}` })).reverse()
+  const log = gap => base(timed(gap), { restSeconds: 90 })
+
+  // 계속 길게 쉬면 늘린다: 가운데 값을 15초 단위로(130 → 135)
+  let r = ev(log(130), { prevLogs: prevOf(130) })
+  assert.deepEqual([r.restAdjust.from, r.restAdjust.to], [90, 135])
+  assert.match(r.restAdjust.reason, /길게/)
+  assert.equal(r.verdict, 'weight-up') // 130초는 "회복 부족"(계획의 1.5배) 기준 밑이라 목표 판정은 그대로 — 휴식 보정은 목표와 별개로 붙는다
+  // 1.5배 넘게 쉬면(150초) 기존 규칙은 증량을 막고, 휴식 보정도 같이 붙는다
+  r = ev(log(150), { prevLogs: prevOf(150) })
+  assert.equal(r.verdict, 'hold')
+  assert.equal(r.restAdjust.to, 150)
+  // 한 번에 늘리는 폭은 +60초까지
+  assert.equal(ev(log(300), { prevLogs: prevOf(300) }).restAdjust.to, 150)
+  // 가운데 값이 기준: 한 번 튄 값(자리 비움)은 영향이 작다
+  const mixed = [prevOf(130, 1)[0], { ...prevOf(130, 1)[0], performedSets: timed(500) }]
+  assert.equal(ev(log(130), { prevLogs: mixed }).restAdjust.to, 135)
+  // 계속 짧게 쉬면 줄인다(90 → 45), 30초 밑으로는 안 내린다
+  r = ev(log(50), { prevLogs: prevOf(50) })
+  assert.deepEqual([r.restAdjust.from, r.restAdjust.to], [90, 45])
+  assert.match(r.restAdjust.reason, /짧게/)
+  assert.equal(ev(base(timed(20), { restSeconds: 60 }), { prevLogs: prevOf(20, 2, 60) }).restAdjust.to, 30)
+
+  // 보정하지 않는 경우: 한 번이라도 계획 근처 / 계획이 중간에 바뀜 / 기록이 3번 미만 / 수퍼세트 / 시각이 없는 기록 / 휴식 계획 없음
+  assert.equal(ev(log(130), { prevLogs: [prevOf(95, 1)[0], prevOf(130, 1)[0]] }).restAdjust, undefined)
+  assert.equal(ev(log(130), { prevLogs: [prevOf(130, 1, 60)[0], prevOf(130, 1)[0]] }).restAdjust, undefined)
+  assert.equal(ev(log(130), { prevLogs: prevOf(130, 1) }).restAdjust, undefined)
+  assert.equal(ev(log(130), { prevLogs: prevOf(130), skipRest: true }).restAdjust, undefined)
+  const untimed = { ...prevOf(130, 1)[0], performedSets: [set(8), set(8), set(8)] }
+  assert.equal(ev(log(130), { prevLogs: [untimed, prevOf(130, 1)[0]] }).restAdjust, undefined)
+  assert.equal(ev(base(timed(130), { restSeconds: 0 }), { prevLogs: prevOf(130, 2, 0) }).restAdjust, undefined)
+  // 계획 근처로 쉬면 보정 없음
+  assert.equal(ev(log(85), { prevLogs: prevOf(85) }).restAdjust, undefined)
+  // 보정 뒤(계획 휴식이 바뀐 뒤)에는 새 값 기준으로 다시 3번을 센다
+  assert.equal(ev(base(timed(130), { restSeconds: 135 }), { prevLogs: prevOf(130) }).restAdjust, undefined)
+}
+
 // 피로도 5는 체감과 무관하게 유지(easy여도)
 assert.equal(ev(base(good, { fatigue: 5, feel: 'easy' })).verdict, 'hold')
 

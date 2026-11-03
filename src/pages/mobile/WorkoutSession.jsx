@@ -30,6 +30,7 @@ const VERDICT_STYLE = {
   hold: { color: 'text-gray-500', icon: '＝' },
   deload: { color: 'text-orange-600', icon: '▼' },
   'reps-down': { color: 'text-orange-600', icon: '▼' },
+  'sets-down': { color: 'text-orange-600', icon: '▼' },
 }
 // 체감 난이도 버튼: 고른 것의 색 (표준 색 클래스라 다크 모드가 자동 적용된다)
 const FEEL_ON = {
@@ -499,8 +500,9 @@ export default function WorkoutSession() {
     const stored = logs.find(l => l.id === log.id) ?? log // 오늘만 바꾼 세트 수가 아니라 계획한 세트 수(기록의 목표)로 평가한다
     const result = evaluateSession({ log: { ...stored, feel: log.feel, performedSets, fatigue }, plan: planOf(log), prevLogs: findPrevLogs(logs, log), meta: metaOf(log), skipRest: inSuperset(log) })
     if (!result) return
-    const note = { exercise: log.exercise, verdict: result.verdict, label: result.label, reason: result.reason, next: result.next }
+    const note = { exercise: log.exercise, verdict: result.verdict, label: result.label, reason: result.reason, next: result.next, restAdjust: result.restAdjust ?? null }
     setProgressionNotes(prev => (prev.some(n => n.exercise === log.exercise) ? prev.map(n => (n.exercise === log.exercise ? note : n)) : [...prev, note]))
+    if (result.restAdjust) pushRest(log, result.restAdjust.to, false) // 계획 휴식 보정(목표와 별개)
     if (result.verdict === 'hold' && !revert) return // 목표를 그대로 두는 경우는 바꿀 게 없다
 
     pushTargets(log, result.next, false)
@@ -544,6 +546,17 @@ export default function WorkoutSession() {
         (includeSelf && l.id === log.id) || (l.routineId === log.routineId && l.exercise === log.exercise && !l.isCompleted && l.date > log.date)
           ? { ...l, targetSets: next.sets, targetReps: next.reps, targetWeight: next.weight }
           : l,
+      ),
+    )
+  }
+  // 계획 휴식(초)을 루틴과, 같은 운동의 앞으로 예정된 기록에 반영한다. includeSelf면 이 기록(오늘 것)에도 반영.
+  const pushRest = (log, to, includeSelf) => {
+    setRoutines(prev =>
+      prev.map(r => (r.id === log.routineId ? { ...r, exercises: r.exercises.map(ex => (ex.exercise === log.exercise ? { ...ex, restSeconds: to } : ex)) } : r)),
+    )
+    setLogs(prev =>
+      prev.map(l =>
+        (includeSelf && l.id === log.id) || (l.routineId === log.routineId && l.exercise === log.exercise && !l.isCompleted && l.date > log.date) ? { ...l, restSeconds: to } : l,
       ),
     )
   }
@@ -909,6 +922,21 @@ export default function WorkoutSession() {
                                   </button>
                                 </div>
                               )}
+                              {/* 계획 휴식 보정 추천: 자동 적용을 꺼 두었거나 아직 반영되지 않은 경우(오늘 휴식이 보정 전 값 그대로일 때)만 */}
+                              {last.result?.restAdjust && l.routineId && Number(l.restSeconds) === last.result.restAdjust.from && (
+                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                  <span className="font-bold text-gray-700">
+                                    추천 휴식 {last.result.restAdjust.to}초 <span className="font-normal text-gray-400">(지금 {last.result.restAdjust.from}초)</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => pushRest(l, last.result.restAdjust.to, true)}
+                                    className="shrink-0 px-3 min-h-[32px] rounded-full bg-letusBlue text-white font-bold active:bg-blue-600"
+                                  >
+                                    적용
+                                  </button>
+                                </div>
+                              )}
                             </>
                           ) : (
                             <div className="text-gray-400">처음 하는 운동이에요. 10회를 2~3회 남기고 할 수 있는 가벼운 무게에서 시작해 보세요. 운동 결과를 보고 앱이 다음 무게를 정해요.</div>
@@ -1181,6 +1209,11 @@ export default function WorkoutSession() {
                   <div className="mt-0.5 text-gray-700">
                     다음 목표 {n.next.sets}세트 × {sideOf(n.exercise)}{n.next.reps}회 × {kgLabel(n.next.weight)}
                   </div>
+                  {n.restAdjust && (
+                    <div className="mt-0.5 text-gray-700">
+                      휴식 {n.restAdjust.from}초 → {n.restAdjust.to}초 <span className="font-normal text-gray-400">· {n.restAdjust.reason}</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
