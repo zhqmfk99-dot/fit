@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, ClipboardList, ListChecks, Tags, Play, Settings } from 'lucide-react'
+import { LayoutDashboard, ClipboardList, ListChecks, Tags, PawPrint, Play, Settings } from 'lucide-react'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import QuickWorkoutModal from './QuickWorkoutModal.jsx'
 import { targetRepsOf } from '../../lib/progression.js'
@@ -12,6 +12,7 @@ const MENU_ITEMS = [
   { path: '/mobile/log', label: '기록', icon: ClipboardList, iconBg: 'bg-orange-50', iconColor: 'text-letusOrange' },
   { path: '/mobile/routine', label: '루틴', icon: ListChecks, iconBg: 'bg-indigo-50', iconColor: 'text-indigo-500' },
   { path: '/mobile/exercises', label: '운동 리스트', icon: Tags, iconBg: 'bg-teal-50', iconColor: 'text-teal-500' },
+  { path: '/mobile/pet', label: '내 펫', icon: PawPrint, iconBg: 'bg-amber-50', iconColor: 'text-amber-500' },
 ]
 
 const getLocalDateString = d => {

@@ -14,6 +14,7 @@ import WorkoutRoutine from './pages/WorkoutRoutine.jsx'
 import WorkoutExercises from './pages/WorkoutExercises.jsx'
 import WorkoutSettings from './pages/WorkoutSettings.jsx'
 import WorkoutSessionWeb from './pages/WorkoutSession.jsx'
+import WorkoutPet from './pages/WorkoutPet.jsx'
 import MobileDashboard from './pages/mobile/MobileDashboard.jsx'
 import MobileMenuScreen from './pages/mobile/MobileMenuScreen.jsx'
 import MobileLog from './pages/mobile/MobileLog.jsx'
@@ -21,6 +22,7 @@ import MobileRoutines from './pages/mobile/MobileRoutines.jsx'
 import MobileExercises from './pages/mobile/MobileExercises.jsx'
 import WorkoutSession from './pages/mobile/WorkoutSession.jsx'
 import MobileSettings from './pages/mobile/MobileSettings.jsx'
+import MobilePet from './pages/mobile/MobilePet.jsx'
 
 // 설정의 테마(라이트/다크/시스템)를 <html>에 반영한다. PWA(/mobile)는 `theme`, 웹앱(데스크탑)은 `webTheme`(기본 라이트)을 쓰고,
 // 화면을 떠나면 뗀다. 상태 표시줄 색(theme-color)도 같이 맞춘다.
@@ -66,6 +68,7 @@ function DesktopApp() {
         <Route path="/workout/exercises" element={<WorkoutExercises />} />
         <Route path="/workout/settings" element={<WorkoutSettings />} />
         <Route path="/workout/session" element={<WorkoutSessionWeb />} />
+        <Route path="/workout/pet" element={<WorkoutPet />} />
       </Routes>
     </Layout>
   )
@@ -88,6 +91,7 @@ function MobileApp() {
           <Route path="exercises" element={<MobileExercises />} />
           <Route path="session" element={<WorkoutSession />} />
           <Route path="settings" element={<MobileSettings />} />
+          <Route path="pet" element={<MobilePet />} />
         </Routes>
       </div>
     </BackNavigationProvider>

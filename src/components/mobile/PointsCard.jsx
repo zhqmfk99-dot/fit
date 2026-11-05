@@ -1,11 +1,13 @@
 import { usePoints } from '../../context/PointsContext.jsx'
-import { POINT_WORKOUT_DAY, POINT_WEEKLY_GOAL } from '../../lib/points.js'
+import { POINT_WORKOUT_DAY, POINT_WEEKLY_GOAL, summarizePoints } from '../../lib/points.js'
+import { todayStr } from '../../lib/bodyGoal.js'
 
 // 운동 포인트 카드 (PWA용 화면) — 쓸 수 있는 포인트, 이번 주에 번 포인트, 최근 내역. 포인트 SQL을 실행하지 않았으면 안 보인다.
-export default function PointsCard() {
-  const { supported, loaded, summary } = usePoints()
+export default function PointsCard({ limit = 5 }) {
+  const { supported, loaded, summary, events } = usePoints()
   if (!supported || !loaded) return null
-  const { balance, weekEarned, recent } = summary
+  const { balance, weekEarned } = summary
+  const recent = limit === 5 ? summary.recent : summarizePoints(events, todayStr(), limit).recent // 최근 내역 개수(기본 5)
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
