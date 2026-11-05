@@ -7,8 +7,15 @@ import { useAuth, MIN_PASSWORD_LENGTH } from '../context/AuthContext.jsx'
 import { useSettings, SETTING_LIMITS } from '../context/SettingsContext.jsx'
 import { supabase } from '../lib/supabase.js'
 import { EQUIPMENT_OPTIONS } from '../lib/muscleMap.js'
+import { notifyRestEnd, unlockAudio } from '../lib/restAlert.js'
 import { useCalorieSettings } from '../hooks/useCalorieSettings.js'
 import { useDataExport } from '../hooks/useDataExport.js'
+
+const THEME_OPTIONS = [
+  { value: 'system', label: '시스템' },
+  { value: 'light', label: '라이트' },
+  { value: 'dark', label: '다크' },
+]
 
 function Section({ title, children }) {
   return (
@@ -56,7 +63,7 @@ function Switch({ checked, onChange, label }) {
 }
 
 // 웹앱(데스크탑) 설정 화면. 설정은 PWA와 같은 계정 설정(profiles.settings)을 함께 쓴다 — 여기서 바꾸면 모바일에도 반영된다.
-// 운동 진행 화면(휴식 알림·화면 꺼짐 방지 등)과 다크 모드는 PWA 전용이라 여기에는 없다. (PWA는 MobileSettings.jsx)
+// 웹앱 화면 테마(webTheme, PWA의 theme과 별개)와 휴식 종료 소리는 여기서 정한다. 진동·화면 꺼짐 방지·앱 설치 안내는 모바일 기기 기능이라 PWA 전용이다. (PWA는 MobileSettings.jsx)
 export default function WorkoutSettings() {
   const { user } = useAuth()
   const { settings, update, accountSync, saveError } = useSettings()
@@ -96,6 +103,14 @@ export default function WorkoutSettings() {
     setPwMessage({ text: '비밀번호를 변경했어요.', ok: true })
   }
 
+  // 휴식 종료 소리 시험: 눌렀을 때 실제로 소리를 내 보고 이 브라우저에서 되는지 알려 준다(소리는 화면을 누른 뒤에만 낼 수 있어서 여기서 열어 둔다)
+  const [alertTest, setAlertTest] = useState('')
+  const testSound = () => {
+    unlockAudio()
+    const r = notifyRestEnd({ vibrate: false, sound: true })
+    setAlertTest(r.sounded ? '소리를 냈어요. 안 들리면 컴퓨터 음량·음소거를 확인하세요.' : '이 브라우저에서는 소리를 낼 수 없어요.')
+  }
+
   const changeRest = delta => update({ defaultRestSeconds: settings.defaultRestSeconds + delta })
   const inputClass = 'w-full max-w-[280px] border border-gray-300 rounded-[4px] px-3 py-1.5 text-ui-title bg-white focus:outline-none focus:border-letusBlue'
 
@@ -103,6 +118,29 @@ export default function WorkoutSettings() {
     <div>
       <PageHeader title="설정" color="bg-slate-500" />
       <div className="p-4 space-y-5 max-w-[760px]">
+        <Section title="화면">
+          <div className="px-4 py-3">
+            <div className="text-ui-title font-bold text-gray-800">웹앱 화면 테마</div>
+            <div className="mt-0.5 text-ui-body text-gray-400 leading-relaxed">이 웹앱(컴퓨터) 화면에만 적용돼요. 모바일 앱의 테마는 모바일 설정에서 따로 정해요.</div>
+            <div className="mt-2.5 grid grid-cols-3 gap-1.5 max-w-[360px]" role="group" aria-label="웹앱 화면 테마">
+              {THEME_OPTIONS.map(o => (
+                <button
+                  key={o.value}
+                  type="button"
+                  aria-pressed={settings.webTheme === o.value}
+                  onClick={() => update({ webTheme: o.value })}
+                  className={`min-h-[34px] rounded-lg text-ui-body font-bold transition-colors ${
+                    settings.webTheme === o.value ? 'bg-letusBlue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            {settings.webTheme === 'system' && <div className="mt-2 text-ui-caption text-gray-400">컴퓨터의 라이트/다크 설정을 따라가요.</div>}
+          </div>
+        </Section>
+
         <Section title="계정">
           <Row title="아이디" right={<span className="text-ui-body text-gray-400">{user?.email}</span>} />
           <Row title="내 정보" desc="이름·성별·나이·키·몸무게, 회원 탈퇴" onClick={() => setShowProfile(true)} right={<span className="text-ui-body font-bold text-letusBlue">열기</span>} />
@@ -190,9 +228,11 @@ export default function WorkoutSettings() {
               </div>
             }
           />
+          <Row title="휴식 종료 소리" desc="운동 진행 화면에서 휴식 시간이 끝나면 짧은 비프음을 내요. 모바일 앱과 같은 설정을 함께 써요. 진동은 컴퓨터 브라우저에서 지원하지 않아요." right={<Switch checked={settings.restAlertSound} onChange={v => update({ restAlertSound: v })} label="휴식 종료 소리" />} />
+          <Row title="소리 시험해 보기" desc={alertTest || '비프음을 한 번 내서 이 브라우저에서 들리는지 확인해요.'} onClick={testSound} right={<span className="text-ui-body font-bold text-letusBlue">재생</span>} />
           <Row
             title="점진 과부하 자동 적용"
-            desc="운동 진행(모바일 앱)에서 운동을 끝내면 목표 달성 여부와 휴식·속도를 보고 다음에 무게를 올릴지 유지할지 정해서 루틴에 자동 반영해요."
+            desc="운동 진행 화면에서 운동을 끝내면 목표 달성 여부와 휴식·속도를 보고 다음에 무게를 올릴지 유지할지 정해서 루틴에 자동 반영해요."
             right={<Switch checked={settings.autoProgression} onChange={v => update({ autoProgression: v })} label="점진 과부하 자동 적용" />}
           />
         </Section>

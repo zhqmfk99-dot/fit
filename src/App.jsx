@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout.jsx'
 import { WorkoutLogsProvider } from './context/WorkoutLogsContext.jsx'
-import { SettingsProvider, useIsDark, useSystemDark, LAST_THEME_KEY } from './context/SettingsContext.jsx'
+import { SettingsProvider, useIsDark, useIsWebDark, useSystemDark, LAST_THEME_KEY, LAST_WEB_THEME_KEY } from './context/SettingsContext.jsx'
 import { BackNavigationProvider } from './context/BackNavigationContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import Login from './pages/Login.jsx'
@@ -12,6 +12,7 @@ import WorkoutLog from './pages/WorkoutLog.jsx'
 import WorkoutRoutine from './pages/WorkoutRoutine.jsx'
 import WorkoutExercises from './pages/WorkoutExercises.jsx'
 import WorkoutSettings from './pages/WorkoutSettings.jsx'
+import WorkoutSessionWeb from './pages/WorkoutSession.jsx'
 import MobileDashboard from './pages/mobile/MobileDashboard.jsx'
 import MobileMenuScreen from './pages/mobile/MobileMenuScreen.jsx'
 import MobileLog from './pages/mobile/MobileLog.jsx'
@@ -20,8 +21,8 @@ import MobileExercises from './pages/mobile/MobileExercises.jsx'
 import WorkoutSession from './pages/mobile/WorkoutSession.jsx'
 import MobileSettings from './pages/mobile/MobileSettings.jsx'
 
-// 설정의 테마(라이트/다크/시스템)를 <html>에 반영한다. PWA(/mobile) 화면이 떠 있는 동안에만 붙이고 떠나면 뗀다 — 웹앱은 항상 라이트.
-// 상태 표시줄 색(theme-color)도 같이 맞춘다.
+// 설정의 테마(라이트/다크/시스템)를 <html>에 반영한다. PWA(/mobile)는 `theme`, 웹앱(데스크탑)은 `webTheme`(기본 라이트)을 쓰고,
+// 화면을 떠나면 뗀다. 상태 표시줄 색(theme-color)도 같이 맞춘다.
 function useThemeClass(dark) {
   useEffect(() => {
     const root = document.documentElement
@@ -40,19 +41,21 @@ function useThemeClass(dark) {
 // 휴대폰 화면(PWA)에서만 적용하고 데스크탑 웹앱의 로그인은 항상 라이트다.
 function AuthTheme() {
   const systemDark = useSystemDark()
-  let theme = 'system'
-  try {
-    theme = localStorage.getItem(LAST_THEME_KEY) || 'system'
-  } catch {
-    /* 저장소를 못 쓰면 시스템 */
-  }
   const mobile = window.innerWidth < 768 || window.location.pathname.startsWith('/mobile')
-  useThemeClass(mobile && (theme === 'dark' || (theme === 'system' && systemDark)))
+  // 휴대폰 화면은 PWA 테마(기본 시스템), 데스크탑은 웹앱 테마(기본 라이트)를 마지막으로 쓴 값으로 따른다
+  let theme = mobile ? 'system' : 'light'
+  try {
+    theme = localStorage.getItem(mobile ? LAST_THEME_KEY : LAST_WEB_THEME_KEY) || theme
+  } catch {
+    /* 저장소를 못 쓰면 기본값 */
+  }
+  useThemeClass(theme === 'dark' || (theme === 'system' && systemDark))
   return null
 }
 
 // 데스크탑 화면 전용 — 사이드바/헤더가 있는 공용 레이아웃을 통과한다
 function DesktopApp() {
+  useThemeClass(useIsWebDark()) // 웹앱 테마 설정(기본 라이트)
   return (
     <Layout>
       <Routes>
@@ -61,6 +64,7 @@ function DesktopApp() {
         <Route path="/workout/routine" element={<WorkoutRoutine />} />
         <Route path="/workout/exercises" element={<WorkoutExercises />} />
         <Route path="/workout/settings" element={<WorkoutSettings />} />
+        <Route path="/workout/session" element={<WorkoutSessionWeb />} />
       </Routes>
     </Layout>
   )

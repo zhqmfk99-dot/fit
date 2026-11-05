@@ -11,8 +11,10 @@ import { GOAL_LIMITS } from '../lib/bodyGoal.js'
 export const SETTING_LIMITS = { restMin: 30, restMax: 300, restStep: 15, calMin: 0.5, calMax: 1.5, calStep: 0.05 }
 const SAVE_DELAY_MS = 600
 export const LAST_THEME_KEY = 'fit-last-theme'
+export const LAST_WEB_THEME_KEY = 'fit-last-web-theme' // 웹앱(데스크탑) 로그인 화면용 — 마지막으로 쓴 웹앱 테마
 export const DEFAULT_SETTINGS = {
-  theme: 'system', // 'system' | 'light' | 'dark'
+  theme: 'system', // PWA(모바일) 화면 테마: 'system' | 'light' | 'dark'
+  webTheme: 'light', // 웹앱(데스크탑) 화면 테마 — PWA와 따로 정한다(기본 라이트: 웹앱은 예전부터 라이트라서 갑자기 바뀌지 않게)
   defaultRestSeconds: 90, // 루틴에 휴식을 안 적었을 때 쓰는 세트 간 휴식
   keepAwake: true, // 운동 중 화면 꺼짐 방지
   restAlertVibrate: true, // 휴식이 끝나면 진동 (지원하는 기기만)
@@ -43,6 +45,7 @@ export function sanitizeSettings(raw) {
   const rest = Number(r.defaultRestSeconds)
   return {
     theme: ['system', 'light', 'dark'].includes(r.theme) ? r.theme : DEFAULT_SETTINGS.theme,
+    webTheme: ['system', 'light', 'dark'].includes(r.webTheme) ? r.webTheme : DEFAULT_SETTINGS.webTheme,
     defaultRestSeconds: Number.isFinite(rest) ? Math.min(SETTING_LIMITS.restMax, Math.max(SETTING_LIMITS.restMin, Math.round(rest))) : DEFAULT_SETTINGS.defaultRestSeconds,
     keepAwake: bool(r.keepAwake, DEFAULT_SETTINGS.keepAwake),
     restAlertVibrate: bool(r.restAlertVibrate, DEFAULT_SETTINGS.restAlertVibrate),
@@ -170,6 +173,13 @@ export function SettingsProvider({ children }) {
       /* 저장소를 못 쓰는 환경이면 기억하지 않는다 */
     }
   }, [settings.theme])
+  useEffect(() => {
+    try {
+      localStorage.setItem(LAST_WEB_THEME_KEY, settings.webTheme)
+    } catch {
+      /* 저장소를 못 쓰는 환경이면 기억하지 않는다 */
+    }
+  }, [settings.webTheme])
 
   const value = useMemo(() => ({ settings, update, accountSync, saveError }), [settings, update, accountSync, saveError])
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
@@ -202,9 +212,16 @@ export function useSystemDark() {
   return systemDark
 }
 
-// 지금 다크 모드로 보여야 하는지: 설정이 "시스템"이면 기기의 다크 모드 설정을 따라간다
+// 지금 다크 모드로 보여야 하는지: 설정이 "시스템"이면 기기의 다크 모드 설정을 따라간다 (PWA 화면)
 export function useIsDark() {
   const { settings } = useSettings()
   const systemDark = useSystemDark()
   return settings.theme === 'dark' || (settings.theme === 'system' && systemDark)
+}
+
+// 웹앱(데스크탑) 화면용 — 웹앱 테마 설정(webTheme)을 따른다
+export function useIsWebDark() {
+  const { settings } = useSettings()
+  const systemDark = useSystemDark()
+  return settings.webTheme === 'dark' || (settings.webTheme === 'system' && systemDark)
 }
