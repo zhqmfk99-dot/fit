@@ -167,7 +167,7 @@ export default function SplitPlanModal({ onClose }) {
                               type="number"
                               inputMode="decimal"
                               min="0"
-                              step="0.5"
+                              step="1"
                               value={sp.weights[it.exercise] ?? ''}
                               onChange={e => sp.setWeight(it.exercise, e.target.value)}
                               placeholder="무게 kg"

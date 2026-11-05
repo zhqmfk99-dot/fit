@@ -23,6 +23,9 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { draftKey, saveDraft, loadDraft, clearDraft, pruneOldDrafts, draftSummary, resumeStepIndex } from '../../lib/sessionDraft.js'
 import { evaluateSession, applyNextToPlan, findPrevLog, findPrevLogs, summarizePerformed, FEEL_LABELS, FEEL_KEYS } from '../../lib/progression.js'
 
+// 세트 진행 화면의 무게 ± 버튼이 한 번에 움직이는 크기(kg). 예전에는 2.5kg이었는데 1kg 단위로 세밀하게 맞출 수 있게 바꿨다.
+const WEIGHT_STEP_KG = 1
+
 // 평가 결과(올리기/유지/낮추기)에 따른 글자색·기호
 const VERDICT_STYLE = {
   'weight-up': { color: 'text-letusBlue', icon: '▲' },
@@ -1051,7 +1054,7 @@ export default function WorkoutSession() {
             return (
               <div className="space-y-4">
                 <StepperCard label={sideOf(currentLog.exercise) ? '반복 (한쪽)' : '반복'} value={shown.reps} step={1} onChange={change('reps')} disabled={reviewing && !editing} />
-                <StepperCard label="무게" value={shown.weight} step={2.5} unit="kg" onChange={change('weight')} disabled={reviewing && !editing} />
+                <StepperCard label="무게" value={shown.weight} step={WEIGHT_STEP_KG} unit="kg" onChange={change('weight')} disabled={reviewing && !editing} />
                 {metaOf(currentLog)?.equipment === '바벨' && renderPlates(shown.weight)}
               </div>
             )

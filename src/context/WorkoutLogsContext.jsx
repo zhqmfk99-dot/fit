@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { generateScheduledLogs } from '../lib/scheduleGenerator.js'
+import { orderLogsByRoutine } from '../lib/logOrder.js'
 import { applyKcal } from '../lib/calories.js'
 import { createSyncer, applyPending, diffOf, isEmptyDiff } from '../lib/persistedSync.js'
 import { createPendingStore } from '../lib/pendingStore.js'
@@ -288,10 +289,10 @@ export function WorkoutLogsProvider({ children }) {
         return
       }
       const loadedRoutines = ro.data.map(routineFromRow)
-      const loadedLogs = lo.data.map(logFromRow)
+      const loadedLogs = orderLogsByRoutine(lo.data.map(logFromRow), loadedRoutines) // 같은 시각에 저장된 예정 기록은 불러올 때 순서가 섞일 수 있어 루틴의 운동 순서로 정렬한다
       const loadedExercises = ex.data.map(exerciseFromRow)
       const mergedRoutines = applyPending(loadedRoutines, pRo)
-      const mergedLogs = applyPending(loadedLogs, pLo)
+      const mergedLogs = orderLogsByRoutine(applyPending(loadedLogs, pLo), mergedRoutines)
       const mergedExercises = applyPending(loadedExercises, pEx)
       // unilateral 칼럼 유무 확인: 행이 있는데 키가 없으면 칼럼이 아직 없는 것
       if (ex.data.length && !('unilateral' in ex.data[0])) {
