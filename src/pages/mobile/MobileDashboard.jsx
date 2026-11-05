@@ -10,6 +10,8 @@ import WeeklyReportCard from '../../components/mobile/WeeklyReportCard.jsx'
 import GoalProgressCard from '../../components/mobile/GoalProgressCard.jsx'
 import DeloadCard from '../../components/mobile/DeloadCard.jsx'
 import WeeklyGoalCard from '../../components/mobile/WeeklyGoalCard.jsx'
+import PointsCard from '../../components/mobile/PointsCard.jsx'
+import PetCard from '../../components/mobile/PetCard.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { totalVolume, unilateralNames } from '../../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../../lib/muscleMap.js'
@@ -53,6 +55,8 @@ export default function MobileDashboard() {
 
         <DeloadCard />
         <WeeklyGoalCard />
+        <PointsCard />
+        <PetCard />
         <WeeklyReportCard />
         <GoalProgressCard />
 

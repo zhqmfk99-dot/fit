@@ -11,6 +11,8 @@ import GoalProgressCard from '../components/web/GoalProgressCard.jsx'
 import DeloadCard from '../components/web/DeloadCard.jsx'
 import TodayWorkoutCard from '../components/web/TodayWorkoutCard.jsx'
 import WeeklyGoalCard from '../components/web/WeeklyGoalCard.jsx'
+import PointsCard from '../components/web/PointsCard.jsx'
+import PetCard from '../components/web/PetCard.jsx'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { totalVolume, unilateralNames } from '../lib/workoutMetrics.js'
 import { exercisesForMuscle, MUSCLE_LABELS } from '../lib/muscleMap.js'
@@ -54,6 +56,8 @@ export default function WorkoutDashboard() {
         <TodayWorkoutCard />
         <DeloadCard />
         <WeeklyGoalCard />
+        <PointsCard />
+        <PetCard />
         <WeeklyReportCard />
         <GoalProgressCard />
 

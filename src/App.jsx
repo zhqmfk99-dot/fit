@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout.jsx'
 import { WorkoutLogsProvider } from './context/WorkoutLogsContext.jsx'
+import { PointsProvider } from './context/PointsContext.jsx'
 import { SettingsProvider, useIsDark, useIsWebDark, useSystemDark, LAST_THEME_KEY, LAST_WEB_THEME_KEY } from './context/SettingsContext.jsx'
 import { BackNavigationProvider } from './context/BackNavigationContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
@@ -122,12 +123,14 @@ export default function App() {
   return (
     <SettingsProvider key={session.user.id}>
       <WorkoutLogsProvider>
-        <Routes>
-          <Route path="/mobile/*" element={<MobileApp />} />
-          {/* 좁은 화면(휴대폰)에서 루트로 들어오면 모바일 메뉴로 보낸다 */}
-          <Route path="/" element={window.innerWidth < 768 ? <Navigate to="/mobile" replace /> : <DesktopApp />} />
-          <Route path="/*" element={<DesktopApp />} />
-        </Routes>
+        <PointsProvider>
+          <Routes>
+            <Route path="/mobile/*" element={<MobileApp />} />
+            {/* 좁은 화면(휴대폰)에서 루트로 들어오면 모바일 메뉴로 보낸다 */}
+            <Route path="/" element={window.innerWidth < 768 ? <Navigate to="/mobile" replace /> : <DesktopApp />} />
+            <Route path="/*" element={<DesktopApp />} />
+          </Routes>
+        </PointsProvider>
       </WorkoutLogsProvider>
     </SettingsProvider>
   )
