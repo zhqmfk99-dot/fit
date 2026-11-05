@@ -24,13 +24,13 @@ async function newDb() {
 const q = async (db, text, params) => (await db.query(text, params)).rows
 const one = async (db, text, params) => Object.values((await q(db, text, params))[0])[0]
 
-const TABLES = ['exercises', 'routines', 'workout_logs', 'profiles', 'body_records', 'ai_usage', 'auth_lookup_attempts']
+const TABLES = ['exercises', 'routines', 'workout_logs', 'profiles', 'body_records', 'ai_usage', 'auth_lookup_attempts', 'point_events', 'pets']
 const COLUMNS = {
   exercises: ['movement_pattern', 'exercise_type', 'tags', 'unilateral', 'note'],
   workout_logs: ['kcal', 'skipped', 'feel'],
   profiles: ['gender', 'age', 'height_cm', 'weight_kg', 'settings'],
 }
-const FUNCTIONS = ['handle_new_user', 'mask_email', 'find_ids_by_name', 'check_id_name', 'delete_my_account', 'consume_ai_usage', 'auth_lookup_guard']
+const FUNCTIONS = ['handle_new_user', 'mask_email', 'find_ids_by_name', 'check_id_name', 'delete_my_account', 'consume_ai_usage', 'auth_lookup_guard', 'claim_points', '_point_days', 'pet_adopt', 'pet_feed', 'point_balance']
 
 async function assertSchema(db, label) {
   for (const t of TABLES) assert.equal(await one(db, `select to_regclass('public.${t}') is not null`), true, `${label}: 테이블 ${t}`)
@@ -118,8 +118,8 @@ const counts = async db => ({
   assert.equal(after.routines, before.routines)
   assert.equal(after.logs, before.logs)
   assert.equal(after.body, before.body)
-  assert.equal(after.policies, before.policies, '정책이 늘거나 줄면 안 됨(삭제 후 다시 만들기)')
-  assert.equal(after.indexes, before.indexes + 3 + 0, '새 인덱스는 횟수 제한 기록 테이블의 것(3개: 기본키 + 2)만 늘어야 함')
+  assert.equal(after.policies, before.policies + 2, '정책은 새 포인트 내역·펫 테이블의 것(2개)만 늘어야 함(기존 정책은 삭제 후 다시 만들어도 같은 수)')
+  assert.equal(after.indexes, before.indexes + 3 + 3 + 2, '새 인덱스는 횟수 제한 기록 테이블의 것(3개: 기본키 + 2)과 포인트 내역 테이블의 것(3개: 기본키 + 유일 제약 + 사용자 인덱스)과 펫 테이블의 것(2개: 기본키 + 키우는 펫 한 마리 제한)만 늘어야 함')
   const idxAfter = (await q(db, `select indexname from pg_indexes where schemaname = 'public' order by 1`)).map(r => r.indexname)
   for (const name of idxBefore) assert.ok(idxAfter.includes(name), `기존 인덱스 ${name}이 그대로`)
 

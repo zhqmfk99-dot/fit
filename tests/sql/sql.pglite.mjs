@@ -232,4 +232,163 @@ for (const mode of ['기존 설치 + mask_find_ids.sql', '새 설치(auth_profil
   await db.close()
   console.log('OK: 아이디 찾기 요청 횟수 제한 통과')
 }
+// ───────── points.sql: 운동한 날 +10, 주간 목표 달성 주 +30 (서버가 workout_logs·설정을 직접 읽어 지급) ─────────
+{
+  const db = await newDb()
+  for (const f of ['schema.sql', 'auth_profiles.sql', 'profile_fields.sql', 'user_settings.sql']) await db.exec(sql(f))
+  await db.exec(`insert into auth.users (id, email) values ('${U1}', 'a@x.com'), ('${U2}', 'b@x.com')`) // 프로필은 가입 트리거가 만든다
+  await db.exec(sql('points.sql'))
+  await db.exec(sql('points.sql')) // 다시 실행해도 안전(멱등)
+
+  const KST = `(now() at time zone 'Asia/Seoul')::date`
+  const MON = `date_trunc('week', ${KST}::timestamp)::date` // 이번 주 월요일
+  const log = (u, date, sets, done = true) => db.exec(`insert into public.workout_logs (user_id, date, exercise, performed_sets, is_completed) values ('${u}', ${date}, '벤치프레스', '${JSON.stringify(sets)}'::jsonb, ${done})`)
+  const claim = async () => Number((await db.query(`select public.claim_points() as r`)).rows[0].r)
+  const events = async () => (await db.query(`select kind, ref, points from public.point_events order by kind, ref`)).rows
+
+  // 로그인 안 한 상태·anon은 거부
+  await as(db, 'authenticated', null)
+  await rejects(db.query(`select public.claim_points()`), /not authenticated/)
+  await as(db, 'anon', null)
+  await rejects(db.query(`select public.claim_points()`), /permission denied/)
+
+  // U1: 오늘 완료(+10). 횟수 0·미완료·14일 밖 기록은 지급 대상이 아니다
+  await db.exec('reset role')
+  await log(U1, KST, [{ reps: 8, weight: 60 }])
+  await log(U1, `${KST} - 1`, [{ reps: 0, weight: 60 }])
+  await log(U1, `${KST} - 2`, [{ reps: 8, weight: 60 }], false)
+  await log(U1, `${KST} - 30`, [{ reps: 8, weight: 60 }])
+  await as(db, 'authenticated', U1)
+  assert.equal(await claim(), 10)
+  assert.equal(await claim(), 0, '같은 날은 한 번만 지급')
+  let ev = await events()
+  assert.equal(ev.length, 1)
+  assert.equal(ev[0].kind, 'workout_day')
+
+  // 주간 목표가 없거나 범위 밖이면 +30은 없다 → 목표 1일로 설정하면 이번 주 +30
+  await db.exec(`update public.profiles set settings = '{"weeklyGoalDays": 9}' where id = '${U1}'`)
+  assert.equal(await claim(), 0)
+  await db.exec(`update public.profiles set settings = '{"weeklyGoalDays": 1}' where id = '${U1}'`)
+  assert.equal(await claim(), 30)
+  assert.equal(await claim(), 0)
+  ev = await events()
+  assert.deepEqual(ev.map(e => e.kind), ['weekly_goal', 'workout_day'])
+  assert.equal((await db.query(`select (ref = ${MON}::text) as same from public.point_events where kind = 'weekly_goal'`)).rows[0].same, true)
+
+  // U2: 지난주 월·화 운동, 목표 2일 — 하루만 했을 땐 +10, 이틀째에 그 주 +30까지
+  await db.exec('reset role')
+  await db.exec(`update public.profiles set settings = '{"weeklyGoalDays": 2}' where id = '${U2}'`)
+  await log(U2, `${MON} - 7`, [{ reps: 5, weight: 0 }])
+  await as(db, 'authenticated', U2)
+  assert.equal(await claim(), 10)
+  await db.exec('reset role')
+  await log(U2, `${MON} - 6`, [{ reps: 5, weight: 0 }])
+  await as(db, 'authenticated', U2)
+  assert.equal(await claim(), 10 + 30)
+  assert.equal((await events()).length, 3)
+
+  // 행 수준 보안: 다른 사람의 내역은 안 보이고, 직접 쓰기·수정·삭제·내부 함수 호출은 안 된다
+  await as(db, 'authenticated', U1)
+  assert.equal((await events()).length, 2)
+  await rejects(db.query(`insert into public.point_events (kind, ref, points) values ('workout_day', 'x', 9999)`), /permission denied/)
+  await rejects(db.query(`update public.point_events set points = 9999`), /permission denied/)
+  await rejects(db.query(`delete from public.point_events`), /permission denied/)
+  await rejects(db.query(`select * from public._point_days('${U2}', ${KST} - 30, ${KST})`), /permission denied/)
+  await as(db, 'anon', null)
+  await rejects(db.query(`select * from public.point_events`), /permission denied/)
+  await db.close()
+  console.log('OK: points.sql(claim_points) 통과')
+}
+// ───────── points.sql: 펫(알 받기·먹이 주기·부화·다 자람·도감) ─────────
+{
+  const db = await newDb()
+  for (const f of ['schema.sql', 'auth_profiles.sql', 'profile_fields.sql', 'user_settings.sql']) await db.exec(sql(f))
+  await db.exec(`insert into auth.users (id, email) values ('${U1}', 'a@x.com'), ('${U2}', 'b@x.com')`)
+  await db.exec(sql('points.sql'))
+  await db.exec(sql('points.sql')) // 다시 실행해도 안전(멱등)
+
+  const give = (u, n) => db.exec(`insert into public.point_events (user_id, kind, ref, points) select '${u}', 'workout_day', 'd' || g, 10 from generate_series(1, ${n}) g`)
+  const balance = async () => Number((await db.query(`select coalesce(sum(points), 0)::int as b from public.point_events`)).rows[0].b)
+  const pet = async () => (await db.query(`select id, species, xp, hatched_at is not null as hatched, completed_at is not null as done from public.pets order by created_at desc, id limit 1`)).rows[0]
+  const feed = n => db.query(`select public.pet_feed($1)`, [n])
+  const adopt = () => db.query(`select public.pet_adopt() as id`)
+
+  // 로그인 안 한 상태·anon은 거부
+  await as(db, 'authenticated', null)
+  await rejects(adopt(), /not authenticated/)
+  await rejects(feed(5), /not authenticated/)
+  await as(db, 'anon', null)
+  await rejects(adopt(), /permission denied/)
+  await rejects(feed(5), /permission denied/)
+
+  // U1: 포인트 300P(운동한 날 30번) — 펫이 없으면 먹이를 못 준다. 첫 알은 무료(내역이 안 생김)
+  await db.exec('reset role')
+  await give(U1, 30)
+  await as(db, 'authenticated', U1)
+  await rejects(feed(5), /no_pet/)
+  await adopt()
+  assert.equal(await balance(), 300, '첫 알은 무료')
+  assert.equal(Number((await db.query(`select public.point_balance() as b`)).rows[0].b), 300, 'point_balance는 본인 행의 합')
+  assert.deepEqual([(await pet()).xp, (await pet()).species, (await pet()).hatched], [0, null, false])
+  await rejects(adopt(), /already_has_pet/)
+
+  // 먹이 양 검증, 부화(20): 종류가 정해진다
+  for (const bad of [0, -1, 51, null]) await rejects(feed(bad), /invalid_amount/)
+  await feed(10)
+  assert.deepEqual([(await pet()).xp, (await pet()).species], [10, null])
+  await feed(10)
+  let p = await pet()
+  assert.equal(p.xp, 20)
+  assert.ok(['chick', 'dragon', 'cat', 'fish'].includes(p.species), '부화하면 종류가 정해진다')
+  assert.equal(p.hatched, true)
+  assert.equal(await balance(), 280)
+  const species = p.species
+  await feed(50)
+  await feed(50)
+  await feed(50)
+  p = await pet()
+  assert.deepEqual([p.xp, p.species, p.done], [170, species, false], '한 번 정해진 종류는 바뀌지 않는다')
+  // 다 자라는 데 필요한 양(30)까지만 쓰고 완료 처리
+  await feed(50)
+  p = await pet()
+  assert.deepEqual([p.xp, p.done], [200, true])
+  assert.equal(await balance(), 100, '남는 포인트는 쓰지 않는다(50이 아니라 30만 차감)')
+  assert.equal((await db.query(`select points from public.point_events where kind = 'pet_feed' order by created_at desc, ref limit 100`)).rows.filter(r => r.points === -30).length, 1)
+  await rejects(feed(5), /no_pet/) // 키우는 펫이 없다(도감으로 갔다)
+
+  // 두 번째 알은 50P: 부족하면 거부, 충분하면 차감
+  await adopt()
+  assert.equal(await balance(), 50)
+  assert.equal((await db.query(`select count(*)::int c from public.point_events where kind = 'pet_egg'`)).rows[0].c, 1)
+  await feed(50)
+  assert.equal(await balance(), 0)
+  await rejects(feed(5), /not_enough_points/)
+  assert.equal((await pet()).xp, 50, '실패한 먹이는 반영되지 않는다')
+
+  // U2: 포인트 없이 첫 알은 받지만, 도감(다 키운 펫)이 있으면 두 번째 알은 포인트가 필요하다
+  await db.exec('reset role')
+  await db.exec(`insert into public.pets (user_id, species, xp, completed_at) values ('${U2}', 'cat', 200, now())`)
+  await as(db, 'authenticated', U2)
+  assert.equal(Number((await db.query(`select public.point_balance() as b`)).rows[0].b), 0, '다른 사람의 포인트는 합산되지 않는다')
+  await rejects(adopt(), /not_enough_points/)
+  assert.equal((await db.query(`select count(*)::int c from public.pets`)).rows[0].c, 1, '실패하면 알이 생기지 않는다')
+  await db.exec('reset role')
+  await give(U2, 5)
+  await as(db, 'authenticated', U2)
+  await adopt()
+  assert.equal(await balance(), 0)
+
+  // 행 수준 보안: 다른 사람의 펫은 안 보이고, 직접 쓰기·수정·삭제는 안 된다
+  assert.equal((await db.query(`select count(*)::int c from public.pets where user_id = '${U1}'`)).rows[0].c, 0)
+  await rejects(db.query(`insert into public.pets (species, xp) values ('cat', 200)`), /permission denied/)
+  await rejects(db.query(`update public.pets set xp = 200`), /permission denied/)
+  await rejects(db.query(`delete from public.pets`), /permission denied/)
+  await as(db, 'anon', null)
+  await rejects(db.query(`select * from public.pets`), /permission denied/)
+  // 키우는 펫은 한 마리만(관리자 권한으로도 두 번째 진행 중 펫은 못 만든다)
+  await db.exec('reset role')
+  await rejects(db.query(`insert into public.pets (user_id) values ('${U2}')`), /duplicate key|unique/)
+  await db.close()
+  console.log('OK: points.sql(pet_adopt·pet_feed) 통과')
+}
 console.log('OK: SQL 전체 통과')
