@@ -321,7 +321,7 @@ export default function WorkoutLog() {
                           <button
                             onClick={e => {
                               e.stopPropagation()
-                              navigate(`/mobile/session?routineId=${group.routineId}&date=${groupDate}`)
+                              navigate(`/workout/session?routineId=${group.routineId}&date=${groupDate}`)
                             }}
                             className="flex items-center gap-1 text-ui-caption font-bold text-white bg-letusBlue hover:bg-blue-600 px-2 py-1 rounded transition-colors"
                             title="운동 시작"
