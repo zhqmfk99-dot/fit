@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLogsCsv, sortLogsForExport } from '../src/lib/exportData.js'
+import { buildLogsCsv, buildBodyCsv, sortLogsForExport } from '../src/lib/exportData.js'
 
 const log = (id, date, exercise, sets, extra = {}) => ({ id, date, exercise, isCompleted: true, performedSets: sets, ...extra })
 const set = (startedAt, reps = 8) => ({ reps, weight: 50, startedAt, endedAt: startedAt == null ? undefined : startedAt + 30000 })
@@ -35,6 +35,18 @@ test('시각이 전혀 없으면 배열 순서(루틴 순서) 그대로 — id �
 test('시작 시각이 같으면 배열 순서 (안정 정렬)', () => {
   const logs = [log('b', '2026-11-05', '먼저', [set(1000)]), log('a', '2026-11-05', '나중', [set(1000)])]
   assert.deepEqual(names(sortLogsForExport(logs)), ['먼저', '나중'])
+})
+
+test('신체 기록 CSV: 맨 끝 열에 측정 기기(집 체중계 / 정밀 측정), 표시가 없는 예전 기록은 집 체중계', () => {
+  const { csv, count } = buildBodyCsv([
+    { id: '2', date: '2026-11-05', weightKg: 72, bodyFatPct: 18, source: 'precise' },
+    { id: '1', date: '2026-11-01', weightKg: 75 },
+  ])
+  const lines = csv.replace('﻿', '').trim().split('\r\n')
+  assert.equal(count, 2)
+  assert.equal(lines[0].split(',').at(-1), '측정 기기')
+  assert.equal(lines[1].split(',').at(-1), '집 체중계') // 날짜순: 11/1 먼저
+  assert.equal(lines[2].split(',').at(-1), '정밀 측정')
 })
 
 test('원본 배열은 바꾸지 않는다', () => {

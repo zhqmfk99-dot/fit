@@ -4,6 +4,8 @@
 // 아래 기준 숫자(최근 30일·3개 평균, 추세 60일, 감량 필요 크기 구간 등)는 흔히 쓰는 값으로 정한 **가정**이다.
 // 체중계·체성분계 값은 하루하루 오차가 커서 마지막 한 값이 아니라 최근 몇 개의 평균을 "현재"로 본다.
 
+import { recordsForCalc } from './bodySource.js'
+
 const DAY_MS = 86400000
 const RECENT_DAYS = 30 // "현재 값"에 쓰는 기록 범위
 const RECENT_COUNT = 3 // 그 안에서 마지막 몇 개의 평균을 쓸지
@@ -34,10 +36,10 @@ const addDays = (s, n) => {
 }
 const round1 = n => Math.round(n * 10) / 10
 
-// 오늘까지의 기록 중 이 지표 값이 있는 것(날짜 오름차순)
+// 오늘까지의 기록 중 이 지표 값이 있는 것(날짜 오름차순). 정밀 측정(인바디 등) 기록은 기계가 달라 추세가 튀므로 집 체중계 기록이 있으면 뺀다(lib/bodySource.js).
 const series = (records, key, today) =>
-  records
-    .filter(r => r[key] != null && Number.isFinite(Number(r[key])) && r.date && r.date <= today)
+  recordsForCalc(records, key)
+    .filter(r => Number.isFinite(Number(r[key])) && r.date && r.date <= today)
     .map(r => ({ date: r.date, v: Number(r[key]) }))
     .sort((a, b) => a.date.localeCompare(b.date))
 

@@ -29,6 +29,7 @@ const COLUMNS = {
   exercises: ['movement_pattern', 'exercise_type', 'tags', 'unilateral', 'note'],
   workout_logs: ['kcal', 'skipped', 'feel'],
   profiles: ['gender', 'age', 'height_cm', 'weight_kg', 'settings'],
+  body_records: ['source'],
 }
 const FUNCTIONS = ['handle_new_user', 'mask_email', 'find_ids_by_name', 'check_id_name', 'delete_my_account', 'consume_ai_usage', 'auth_lookup_guard', 'claim_points', '_point_days', 'pet_adopt', 'pet_feed', 'point_balance']
 

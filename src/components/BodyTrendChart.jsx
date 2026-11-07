@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { BODY_METRICS } from '../lib/bodyMetrics.js'
 import { useSettings } from '../context/SettingsContext.jsx'
+import { isPrecise } from '../lib/bodySource.js'
+import { bodyDot, PreciseLegend } from './BodyDot.jsx'
 
 // 단위·크기가 비슷한 항목끼리 한 그래프로 묶고, 묶음별로 탭(뱃지)을 둔다. (키는 제외)
 const GROUPS = [
@@ -29,7 +31,8 @@ export default function BodyTrendChart({ records }) {
   const data = [...records]
     .sort((a, b) => a.date.localeCompare(b.date))
     .filter(r => metrics.some(m => r[m.key] != null))
-    .map(r => ({ date: r.date.slice(5), ...Object.fromEntries(metrics.map(m => [m.key, r[m.key]])) }))
+    .map(r => ({ date: r.date.slice(5), precise: isPrecise(r), ...Object.fromEntries(metrics.map(m => [m.key, r[m.key]])) }))
+  const hasPrecise = data.some(d => d.precise)
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -69,11 +72,12 @@ export default function BodyTrendChart({ records }) {
               <ReferenceLine key={g.key} y={g.value} stroke="#dc2626" strokeDasharray="5 4" label={{ value: `${g.label} ${g.value}`, position: 'insideTopRight', fontSize: 12, fill: '#dc2626' }} />
             ))}
             {metrics.map((m, i) => (
-              <Line key={m.key} type="monotone" name={m.label} dataKey={m.key} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              <Line key={m.key} type="monotone" name={m.label} dataKey={m.key} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={bodyDot(COLORS[i % COLORS.length])} connectNulls />
             ))}
           </LineChart>
         </ResponsiveContainer>
       )}
+      {hasPrecise && <PreciseLegend className="mt-2 text-xs text-gray-400" />}
     </div>
   )
 }

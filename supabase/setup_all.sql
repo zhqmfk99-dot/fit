@@ -3,7 +3,7 @@
 -- Supabase SQL Editor에 이 파일 내용을 통째로 붙여넣어 실행하세요.
 -- 새로 설치할 때도, 이미 쓰고 있는 DB를 최신으로 맞출 때도 이 파일 하나면 됩니다.
 -- 모든 문장이 여러 번 실행해도 안전하게 되어 있어서(없을 때만 만들고, 기존 데이터는 그대로 둡니다) 새 SQL이 추가될 때마다 다시 실행하면 됩니다.
--- 아래 파일들이 이 순서로 들어 있습니다: schema.sql → auth_profiles.sql → profile_fields.sql → body_records.sql → seed_exercises.sql → log_kcal.sql → ai_usage.sql → user_settings.sql → unilateral.sql → log_skipped.sql → log_feel.sql → exercise_note.sql → auth_rate_limit.sql → points.sql
+-- 아래 파일들이 이 순서로 들어 있습니다: schema.sql → auth_profiles.sql → profile_fields.sql → body_records.sql → seed_exercises.sql → log_kcal.sql → ai_usage.sql → user_settings.sql → unilateral.sql → log_skipped.sql → log_feel.sql → exercise_note.sql → auth_rate_limit.sql → points.sql → body_source.sql
 --
 -- 앱을 배포하기 **전에** 실행하세요(새 칼럼이 없는 상태에서 새 앱이 저장하면 일부 기능이 실패하거나 값이 유지되지 않습니다).
 
@@ -1042,3 +1042,20 @@ $$;
 
 revoke all on function public.point_balance() from public, anon;
 grant execute on function public.point_balance() to authenticated;
+
+-- ======================================================================
+-- body_source.sql
+-- ======================================================================
+
+-- 신체 기록의 "측정 기기" 표시: 집 체중계('home', 기본) / 보건소·체육관 인바디 같은 정밀 측정('precise').
+-- Supabase SQL Editor에서 실행한다 (body_records.sql 실행 후). 여러 번 실행해도 안전하고 기존 기록은 모두 'home'이 된다.
+-- 실행하지 않아도 앱은 동작한다 — 그때는 측정 기기 표시가 저장되지 않는다(앱을 다시 열면 사라지고, 입력 창에 안내가 뜬다).
+--
+-- 기계마다 체지방률·근육량 값이 다르게 나와서, 정밀 측정 기록은 "지금 값·추세·목표 진행" 계산에서 빼고 그래프·기록에만 따로 표시한다(앱 로직).
+
+alter table public.body_records
+  add column if not exists source text not null default 'home';
+
+alter table public.body_records drop constraint if exists body_records_source_check;
+alter table public.body_records
+  add constraint body_records_source_check check (source in ('home', 'precise'));

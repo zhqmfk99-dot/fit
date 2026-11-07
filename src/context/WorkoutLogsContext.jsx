@@ -6,6 +6,7 @@ import { applyKcal } from '../lib/calories.js'
 import { createSyncer, applyPending, diffOf, isEmptyDiff } from '../lib/persistedSync.js'
 import { createPendingStore } from '../lib/pendingStore.js'
 import { cleanNote } from '../lib/exerciseNote.js'
+import { normalizeSource } from '../lib/bodySource.js'
 import { unilateralNames } from '../lib/workoutMetrics.js'
 import { useAuth } from './AuthContext.jsx'
 import { useSettings } from './SettingsContext.jsx'
@@ -89,6 +90,7 @@ const bodyRecordFromRow = r => ({
   waterPct: num(r.water_pct),
   skeletalMuscleKg: num(r.skeletal_muscle_kg),
   bmr: num(r.bmr),
+  source: normalizeSource(r.source), // 측정 기기: 'home'(집 체중계) | 'precise'(인바디 등 정밀 측정) — 정밀 측정은 지금 값·추세 계산에서 빠진다 (lib/bodySource.js)
 })
 const bodyRecordToRow = b => ({
   id: b.id,
@@ -104,6 +106,7 @@ const bodyRecordToRow = b => ({
   water_pct: b.waterPct ?? null,
   skeletal_muscle_kg: b.skeletalMuscleKg ?? null,
   bmr: b.bmr ?? null,
+  source: normalizeSource(b.source),
 })
 
 // useState처럼 쓸 수 있는(값 또는 함수형 업데이트) setter를 만들되, 변경분을 Supabase에 비동기로 저장한다.
@@ -257,10 +260,18 @@ export function WorkoutLogsProvider({ children }) {
     if (!noteColumnRef.current) delete row.note
     return row
   }, [])
+  // body_records.source 칼럼도 같은 방식 — 없으면(SQL 미실행) 측정 기기 표시를 저장하지 않고(앱을 다시 열면 집 체중계로 돌아감) 신체 기록 저장은 실패하지 않는다. 입력 창에 안내가 뜬다.
+  const [bodySourceSupported, setBodySourceSupported] = useState(true)
+  const bodySourceColumnRef = useRef(true)
+  const toBodyRow = useCallback(b => {
+    const row = bodyRecordToRow(b)
+    if (!bodySourceColumnRef.current) delete row.source
+    return row
+  }, [])
   const [logs, setLogs, replaceLogs, retryLogs] = usePersistedState('workout_logs', toLogRow, queueRef, handleSaveError, handleSaved, transformLogs, storeRef.current)
   const [routines, setRoutines, replaceRoutines, retryRoutines] = usePersistedState('routines', routineToRow, queueRef, handleSaveError, handleSaved, undefined, storeRef.current)
   const [exercises, setExercises, replaceExercises, retryExercises] = usePersistedState('exercises', toExerciseRow, queueRef, handleSaveError, handleSaved, undefined, storeRef.current)
-  const [bodyRecords, setBodyRecords, replaceBodyRecords, retryBodyRecords] = usePersistedState('body_records', bodyRecordToRow, queueRef, handleSaveError, handleSaved, undefined, storeRef.current)
+  const [bodyRecords, setBodyRecords, replaceBodyRecords, retryBodyRecords] = usePersistedState('body_records', toBodyRow, queueRef, handleSaveError, handleSaved, undefined, storeRef.current)
   runnersRef.current = { workout_logs: retryLogs, routines: retryRoutines, exercises: retryExercises, body_records: retryBodyRecords }
   weightSourceRef.current = { bodyRecords, profileWeightKg, calibration: settings.calorieCalibration, uni: unilateralNames(exercises) }
 
@@ -309,6 +320,12 @@ export function WorkoutLogsProvider({ children }) {
       replaceExercises(loadedExercises)
       replaceRoutines(loadedRoutines)
       const loadedBodyRecords = (bo.data ?? []).map(bodyRecordFromRow)
+      // source 칼럼 유무 확인(같은 방식)
+      if (bo.data?.length && !('source' in bo.data[0])) {
+        bodySourceColumnRef.current = false
+        setBodySourceSupported(false)
+        console.warn('body_records.source 칼럼이 없어 측정 기기 표시를 저장하지 않습니다. supabase/body_source.sql을 실행하세요.')
+      }
       // kcal 칼럼 유무 확인: 행이 있는데 kcal 키가 없으면 칼럼이 아직 없는 것
       if (lo.data.length && !('kcal' in lo.data[0])) {
         kcalColumnRef.current = false
@@ -363,7 +380,7 @@ export function WorkoutLogsProvider({ children }) {
   }
 
   return (
-    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported, noteSupported, skippedSupported, feelSupported }}>
+    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported, noteSupported, skippedSupported, feelSupported, bodySourceSupported }}>
       {error && (
         <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
           <span>{error}</span>

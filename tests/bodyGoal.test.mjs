@@ -113,3 +113,50 @@ w = describeMetric(d2.fat, '%', d2); assert.match(w.stale, /87일 전/); assert.
 assert.equal(describeMetric(null, 'kg'), null)
 assert.equal(describeMetric({ target: 70, cur: null }, 'kg'), null)
 console.log('OK: 문구 통과')
+
+// ───────── 측정 기기(정밀 측정 제외) ─────────
+{
+  const { recordsForCalc, isPrecise, normalizeSource, sourceLabel } = await import('../src/lib/bodySource.js')
+  const now = new Date(2026, 10, 1) // 2026-11-01
+  const home = (date, w, f) => ({ date, weightKg: w, bodyFatPct: f, source: 'home' })
+  const pro = (date, w, f) => ({ date, weightKg: w, bodyFatPct: f, source: 'precise' })
+
+  // 값 보정
+  assert.equal(normalizeSource('precise'), 'precise')
+  assert.equal(normalizeSource(undefined), 'home')
+  assert.equal(normalizeSource('이상한 값'), 'home')
+  assert.equal(isPrecise({ source: 'precise' }), true)
+  assert.equal(isPrecise({}), false) // 예전 기록(표시 없음)은 집 체중계
+  assert.equal(sourceLabel('precise'), '정밀 측정')
+  assert.equal(sourceLabel(null), '집 체중계')
+
+  // 정밀 측정은 지표별로: 집 기록이 있으면 빼고, 그 지표가 정밀에만 있으면 대신 쓴다
+  const mixed = [home('2026-10-10', 76, null), home('2026-10-20', 75, null), pro('2026-10-25', 72, 18)]
+  assert.deepEqual(recordsForCalc(mixed, 'weightKg').map(r => r.date), ['2026-10-10', '2026-10-20'])
+  assert.deepEqual(recordsForCalc(mixed, 'bodyFatPct').map(r => r.date), ['2026-10-25']) // 체지방률은 정밀에만 있음 → 대신 사용
+  assert.deepEqual(recordsForCalc([], 'weightKg'), [])
+  assert.deepEqual(recordsForCalc(null, 'weightKg'), [])
+
+  // 지금 값: 정밀 측정(체중 72)이 가장 최근이어도 집 체중계 기록(76·75)의 평균을 쓴다
+  const cur = currentValue(mixed, 'weightKg', now)
+  assert.equal(cur.value, 75.5)
+  assert.equal(cur.count, 2)
+  // 체지방률은 정밀 측정에만 있으니 그 값
+  assert.equal(currentValue(mixed, 'bodyFatPct', now).value, 18)
+
+  // 추세: 정밀 측정 한 번이 선을 꺾지 않는다 (집 기록만 76→75, 정밀 72가 끼면 훨씬 가파르게 보임)
+  const trendRecs = [home('2026-09-20', 77, null), home('2026-10-05', 76, null), home('2026-10-20', 75, null)]
+  const t1 = trendPerWeek(trendRecs, 'weightKg', now)
+  const t2 = trendPerWeek([...trendRecs, pro('2026-10-28', 70, 15)], 'weightKg', now)
+  assert.equal(t2.perWeek, t1.perWeek)
+  assert.equal(t2.n, t1.n)
+
+  // 집 체중계 기록이 하나도 없으면 정밀 측정 기록을 그대로 쓴다
+  assert.equal(currentValue([pro('2026-10-25', 72, 18)], 'weightKg', now).value, 72)
+
+  // 목표 진행: 정밀 측정의 체지방률 하나만 있으면 그 값으로 현재 값이 잡힌다, 집 체중이 있으면 체중은 집 기준
+  const g = buildBodyGoal(mixed, null, { goalWeightKg: 70, goalBodyFatPct: 15 }, now)
+  assert.equal(g.weight.cur.value, 75.5)
+  assert.equal(g.fat.cur.value, 18)
+}
+console.log('OK: 측정 기기 통과')

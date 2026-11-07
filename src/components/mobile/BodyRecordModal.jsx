@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { calcBmi, calcBmr } from '../../lib/bodyMetrics.js'
+import { SOURCE_OPTIONS, SOURCE_HINT, normalizeSource } from '../../lib/bodySource.js'
 
 const inputClass = 'w-full h-11 px-3 border border-gray-300 rounded-lg text-m-body bg-white focus:outline-none focus:border-emerald-500'
 const readOnlyClass = 'w-full h-11 px-3 border border-gray-100 bg-gray-50 text-gray-500 rounded-lg text-m-body flex items-center'
@@ -39,10 +40,11 @@ const toForm = record => Object.fromEntries(INPUT_KEYS.map(k => [k, record?.[k] 
 export default function BodyRecordModal({ initialDate, onClose }) {
   useBackHandler(onClose) // 뒤로가기(제스처)로 이 창을 닫는다
   const { user } = useAuth()
-  const { bodyRecords, setBodyRecords } = useWorkoutLogs()
+  const { bodyRecords, setBodyRecords, bodySourceSupported } = useWorkoutLogs()
   const startDate = initialDate || getToday()
   const [date, setDate] = useState(startDate)
   const [form, setForm] = useState(() => toForm(bodyRecords.find(r => r.date === startDate)))
+  const [source, setSource] = useState(() => normalizeSource(bodyRecords.find(r => r.date === startDate)?.source)) // 측정 기기: 집 체중계 / 정밀 측정
   const [profile, setProfile] = useState(null) // { gender, age, height_cm } — BMR 계산과 키 기본값에 쓴다
   const [message, setMessage] = useState('')
 
@@ -69,7 +71,10 @@ export default function BodyRecordModal({ initialDate, onClose }) {
     setDate(nextDate)
     setMessage('')
     const existing = bodyRecords.find(r => r.date === nextDate)
-    if (existing) return setForm(toForm(existing))
+    if (existing) {
+      setSource(normalizeSource(existing.source))
+      return setForm(toForm(existing))
+    }
     const lastHeight = bodyRecords.find(r => r.heightCm)?.heightCm ?? profile?.height_cm ?? ''
     setForm({ ...toForm(null), heightCm: lastHeight })
   }
@@ -92,6 +97,7 @@ export default function BodyRecordModal({ initialDate, onClose }) {
       ...Object.fromEntries(INPUT_KEYS.map(k => [k, form[k] === '' ? null : Number(form[k])])),
       bmi,
       bmr,
+      source,
     }
     setBodyRecords(prev => (existing ? prev.map(r => (r.id === saved.id ? saved : r)) : [saved, ...prev]))
     onClose()
@@ -112,6 +118,26 @@ export default function BodyRecordModal({ initialDate, onClose }) {
             <span className="block text-m-caption font-bold text-gray-500 mb-1">날짜</span>
             <DateInput value={date} onChange={handleDateChange} fullWidth />
           </label>
+
+          <div>
+            <span className="block text-m-caption font-bold text-gray-500 mb-1">측정 기기</span>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="측정 기기">
+              {SOURCE_OPTIONS.map(o => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={source === o.value}
+                  onClick={() => setSource(o.value)}
+                  className={`h-10 rounded-lg border text-m-body font-bold transition-colors ${source === o.value ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-gray-300 text-gray-600 active:bg-gray-50'}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-m-caption text-gray-400 leading-relaxed">{SOURCE_HINT}</p>
+            {bodySourceSupported === false && <p className="mt-1 text-m-caption font-bold text-orange-600">※ 이 데이터베이스에는 측정 기기 칼럼이 없어 저장되지 않아요. supabase/body_source.sql 실행이 필요해요.</p>}
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             {FIELDS.map(f => (

@@ -2,6 +2,7 @@
 // 엑셀에서 한글이 깨지지 않게 파일 맨 앞에 BOM을 붙이고, 쉼표·따옴표·줄바꿈이 들어간 값은 따옴표로 감싼다.
 
 import { BODY_METRICS } from './bodyMetrics.js'
+import { sourceLabel } from './bodySource.js'
 
 const csvCell = v => {
   if (v == null) return ''
@@ -62,10 +63,10 @@ export function buildLogsCsv(logs, routines) {
 // 신체 기록: 날짜순, 항목은 신체 추이 그래프와 같은 이름
 export function buildBodyCsv(bodyRecords) {
   const metrics = [{ key: 'heightCm', label: '키', unit: 'cm' }, ...BODY_METRICS]
-  const rows = [['날짜', ...metrics.map(m => (m.unit ? `${m.label}(${m.unit})` : m.label))]]
+  const rows = [['날짜', ...metrics.map(m => (m.unit ? `${m.label}(${m.unit})` : m.label)), '측정 기기']]
   ;[...bodyRecords]
     .sort((a, b) => a.date.localeCompare(b.date))
-    .forEach(r => rows.push([r.date, ...metrics.map(m => r[m.key] ?? '')]))
+    .forEach(r => rows.push([r.date, ...metrics.map(m => r[m.key] ?? ''), sourceLabel(r.source)]))
   return { csv: toCsv(rows), count: rows.length - 1 }
 }
 

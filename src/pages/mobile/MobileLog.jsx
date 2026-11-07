@@ -11,6 +11,7 @@ import { formatDuration } from '../../lib/workoutTime.js'
 import { setCount, avgReps, avgWeight } from '../../lib/workoutMetrics.js'
 import { isPending, isSkipped } from '../../lib/logStatus.js'
 import { buildDayDots } from '../../lib/dayDots.js'
+import { isPrecise } from '../../lib/bodySource.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../../hooks/useWorkoutLog.js'
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
@@ -225,7 +226,10 @@ export default function MobileLog() {
           <button onClick={() => setShowBodyModal(true)} className="w-full text-left bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2.5 flex items-center gap-3 active:bg-emerald-100 transition-colors">
             <Scale className="w-5 h-5 text-emerald-600 shrink-0" />
             <div className="min-w-0 flex-1">
-              <div className="text-m-body font-bold text-emerald-800">신체 기록</div>
+              <div className="text-m-body font-bold text-emerald-800">
+                신체 기록
+                {isPrecise(bodyRecordOfDay) && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-m-caption font-bold align-middle">정밀 측정</span>}
+              </div>
               <div className="text-m-caption text-emerald-700 truncate">
                 {BODY_SUMMARY.filter(f => bodyRecordOfDay[f.key] != null)
                   .map(f => `${f.label} ${bodyRecordOfDay[f.key]}${f.unit}`)

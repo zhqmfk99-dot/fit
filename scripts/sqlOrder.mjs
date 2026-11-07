@@ -19,6 +19,7 @@ export const SETUP_ORDER = [
   'exercise_note.sql',
   'auth_rate_limit.sql',
   'points.sql',
+  'body_source.sql',
 ]
 
 // 한 번에 실행하는 파일에 넣지 않는 파일과 이유

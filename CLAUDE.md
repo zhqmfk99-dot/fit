@@ -327,6 +327,14 @@ PWA(모바일) 화면은 터치 화면이라 웹앱보다 크게 잡은 별도 �
 - **SQL `supabase/points.sql`**(`SETUP_ORDER` 맨 뒤, 배포 **전에** `setup_all.sql` 실행): 없으면 `PointsContext`가 오류 코드(`PGRST202/205`, `42P01/42883`)로 알아채 `supported=false`가 되고 카드가 숨겨진다(앱은 정상 동작).
 - **한계**: 운동 기록은 사용자가 직접 고칠 수 있어서 **가짜 기록으로 포인트를 모으는 것은 막지 못한다**(포인트 숫자를 마음대로 넣는 것만 막음). 주간 목표 일수를 1로 낮추면 주마다 +30을 쉽게 받는다(목표는 지급 시점 값 기준, 한 번 받은 주는 되돌리지 않음). 시간대는 한국 시간 고정. 기록이 서버에 저장되기 전에 요청이 가면 그때는 못 받고 다음 요청에 받는다. SQL은 임베디드 Postgres(PGlite)로 지급·멱등·주 경계·권한·RLS·기존 설치 덮어쓰기를 검증했고(`npm run test:sql`), **실제 Supabase와 화면(카드 표시)은 확인하지 못했다.**
 
+## 신체 기록의 측정 기기 (집 체중계 / 정밀 측정, 웹앱·PWA)
+- 신체 기록 입력 창(웹앱 `components/BodyRecordModal.jsx`, PWA `components/mobile/BodyRecordModal.jsx`)의 날짜 아래 **"측정 기기"** 선택: **집 체중계**(기본, 예전 기록도 모두 이쪽) / **정밀 측정**(보건소·체육관 인바디 등). 날짜당 기록은 한 건이라 한 날짜에 두 기기를 같이 적을 수는 없다. 날짜를 바꿔 기존 기록을 불러오면 그 기록의 기기가 선택된다.
+- **정밀 측정은 "지금 값·추세·목표 진행" 계산에서 뺀다**(`lib/bodySource.js`의 `recordsForCalc`, `lib/bodyGoal.js`의 `series`가 사용). 기계마다 체지방률·근육량이 다르게 나와서 섞으면 실제 변화 없이 추세가 튀기 때문이다. **지표별로** 판단해서, 집 체중계 기록이 있는 지표는 집 기록만 쓰고 그 지표가 정밀 측정에만 있으면(예: 체지방률은 인바디에만 있음) 정밀 측정 값을 대신 쓴다. 집 기록이 하나도 없는 지표도 같다.
+- **계산에서 빼지 않는 곳**: 소모 칼로리용 체중(`lib/calories.js`)·AI 체형 정보 전송·신체 기록 알림(마지막 기록일 +14일)은 기기와 상관없이 모든 기록을 쓴다(인바디 체중이 더 정확하고, 알림은 "기록했는가"만 보기 때문). 목표 진행 카드에 "마지막 기록이 N일 전" 경고가 뜨는 기준은 집 기록 기준이라, 최근에 정밀 측정만 했다면 경고가 남을 수 있다.
+- **표시**: 신체 추이 그래프(`components/BodyTrendChart.jsx`·`components/mobile/BodyTrendChart.jsx`)에서 정밀 측정 기록은 속이 빈 **마름모**, 집 체중계는 동그라미(점 모양 `components/BodyDot.jsx`, 정밀 측정이 있을 때만 그래프 아래 범례), PWA 기록 화면의 날짜별 신체 기록 요약에 "정밀 측정" 뱃지. 신체 기록 CSV 내려받기에는 맨 끝에 "측정 기기" 열(집 체중계/정밀 측정, 표시 없는 옛 기록은 집 체중계)이 붙는다.
+- **SQL `supabase/body_source.sql`**(`SETUP_ORDER` 맨 뒤, 배포 **전에** 실행, 칼럼 한 개 `body_records.source text not null default 'home'`): 칼럼이 없으면 앱이 `source`를 저장 요청에서 빼서(`bodySourceColumnRef`) 신체 기록 저장은 실패하지 않지만 표시가 앱을 다시 열면 집 체중계로 돌아가고, 입력 창에 안내가 뜬다(`bodySourceSupported`).
+- **한계**: 정밀 측정만 있는 기간에는 그 값으로 추세를 보지 않는다(집 기록이 있으면 항상 집 기록 우선). 정밀 측정과 집 체중계의 **같은 날 오차 비교**(집 체중계가 체지방률을 몇 %p 높게 재는지)는 날짜당 한 건 제약 때문에 만들지 않았다. 측정 기기는 2종뿐이고 자유 입력(기기 이름)은 없다. `tests/bodyGoal.test.mjs`(측정 기기 절)가 계산 제외·지표별 대체·추세 불변·목표 진행을, `tests/exportData.test.mjs`가 CSV 열을 확인했고, 가짜 데이터로 PWA(375px)·웹앱(다크)에서 입력 창 선택·저장값(`source: 'precise'`)·그래프 마름모·범례·SQL 미실행 안내·가로 넘침 없음을 확인했다. **실제 DB에 SQL을 실행한 상태와 실제 인바디 기록은 확인하지 못했다.**
+
 ## 작업 규칙
 - Windows 경로 길이 문제로 저장소는 `C:\dev\fit`에 둔다.
 - **SQL을 추가·수정하면**: 새 파일은 `scripts/sqlOrder.mjs`의 `SETUP_ORDER`에 순서대로 넣고(빠뜨리면 `npm test`가 실패), 반드시 여러 번 실행해도 안전하게 쓰고(`create table/index if not exists`, 정책은 `drop policy if exists` 뒤에 `create policy`, `drop table`·`truncate` 금지 — 테스트가 훑는다), `npm run sql:build`로 `supabase/setup_all.sql`을 다시 만든다(CI·`npm test`가 최신인지 확인). `seed_exercises.sql`·`auth_profiles.sql`처럼 뒤 파일이 함수를 덮어쓰는 쌍은 덮어쓰는 파일이 뒤에 오게 한다(`unilateral.sql`은 seed 뒤, `auth_rate_limit.sql`은 auth_profiles 뒤).
