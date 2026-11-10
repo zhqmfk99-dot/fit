@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../lib/workoutMetrics.js'
 import { pendingInGroup, withoutPendingInGroup } from '../lib/routineCleanup.js'
+import { rescheduleGroup, withMovedMark } from '../lib/reschedule.js'
 
 export const getLocalDateString = d => {
   const pad = n => String(n).padStart(2, '0')
@@ -23,7 +24,7 @@ export function fatigueBadgeColor(level) {
 // "기록" 화면(데스크탑 캘린더+사이드리스트 / 모바일 캘린더+카드리스트)이 공유하는 상태·로직.
 export function useWorkoutLog() {
   const navigate = useNavigate()
-  const { logs, setLogs, routines } = useWorkoutLogs()
+  const { logs, setLogs, routines, movedSupported } = useWorkoutLogs()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   const [listDate, setListDate] = useState(getLocalDateString(new Date()))
@@ -78,7 +79,8 @@ export function useWorkoutLog() {
     if (!rescheduleTarget) return
     const { routineId, oldDate } = rescheduleTarget
     if (newDate !== oldDate) {
-      setLogs(prev => prev.map(l => (l.routineId === routineId && l.date === oldDate ? { ...l, date: newDate } : l)))
+      // 옮긴 기록에 "원래 날짜"를 남겨서, 다음에 앱을 열 때 그 날짜에 예정 기록이 다시 생기지 않게 한다(lib/reschedule.js)
+      setLogs(prev => rescheduleGroup(prev, routineId, oldDate, newDate))
     }
   }
 
@@ -146,7 +148,7 @@ export function useWorkoutLog() {
   // 건너뜀으로 표시된 운동을 다시 예정으로 되돌린다(기록 화면의 다시 하기)
   const restoreSkipped = id => setLogs(prev => prev.map(l => (l.id === id ? { ...l, skipped: false } : l)))
   const handleModalSave = saved => {
-    setLogs(prev => (modalRow ? prev.map(l => (l.id === saved.id ? saved : l)) : [saved, ...prev]))
+    setLogs(prev => (modalRow ? prev.map(l => (l.id === saved.id ? withMovedMark(l, saved) : l)) : [saved, ...prev]))
     setListDate(saved.date)
   }
 
@@ -173,6 +175,7 @@ export function useWorkoutLog() {
     rescheduleTarget,
     setRescheduleTarget,
     handleRescheduleConfirm,
+    movedSupported,
     showModal,
     setShowModal,
     modalRow,

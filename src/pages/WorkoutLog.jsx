@@ -35,6 +35,7 @@ export default function WorkoutLog() {
     rescheduleTarget,
     setRescheduleTarget,
     handleRescheduleConfirm,
+    movedSupported,
     showModal,
     setShowModal,
     modalRow,
@@ -374,6 +375,7 @@ export default function WorkoutLog() {
           currentDate={rescheduleTarget.oldDate}
           onClose={() => setRescheduleTarget(null)}
           onConfirm={handleRescheduleConfirm}
+          movedSupported={movedSupported}
         />
       )}
     </div>

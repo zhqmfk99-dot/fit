@@ -56,6 +56,7 @@ const logFromRow = r => ({
   kcal: r.kcal == null ? null : Number(r.kcal), // 소모 칼로리(추정) — 완료·수정 시 앱이 계산해서 저장 (lib/calories.js)
   skipped: !!r.skipped, // 하지 않기로 한(건너뛴) 운동 — 완료도 예정도 아닌 상태 (lib/logStatus.js)
   feel: r.feel ?? null, // 체감 난이도 easy/ok/hard — 운동을 끝낸 뒤 사용자가 고른다 (lib/progression.js)
+  movedFrom: Array.isArray(r.moved_from) ? r.moved_from : [], // 날짜 변경으로 비워진 원래 날짜들 — 그 날짜에 예정 기록이 다시 생기지 않게 한다 (lib/reschedule.js)
 })
 const logToRow = l => ({
   id: l.id,
@@ -73,6 +74,7 @@ const logToRow = l => ({
   kcal: l.kcal ?? null,
   skipped: !!l.skipped,
   feel: l.feel ?? null,
+  moved_from: Array.isArray(l.movedFrom) ? l.movedFrom : [],
 })
 
 const num = v => (v == null ? null : Number(v))
@@ -240,12 +242,16 @@ export function WorkoutLogsProvider({ children }) {
   // workout_logs.feel 칼럼도 같은 방식 — 없으면 체감 난이도를 저장하지 않고(앱을 다시 열면 사라짐) 기록 저장은 실패하지 않는다.
   const feelColumnRef = useRef(true)
   const [feelSupported, setFeelSupported] = useState(true)
+  // workout_logs.moved_from 칼럼도 같은 방식 — 없으면 "날짜를 바꿔 비운 원래 날짜"를 저장하지 않아서(기록 저장은 실패하지 않음) 앱을 다시 열면 원래 날짜에 예정 기록이 다시 생길 수 있다. 날짜 변경 창에 안내가 뜬다.
+  const movedColumnRef = useRef(true)
+  const [movedSupported, setMovedSupported] = useState(true)
   const transformLogs = useCallback((next, prev) => (kcalColumnRef.current ? applyKcal(next, prev, weightSourceRef.current) : next), [])
   const toLogRow = useCallback(l => {
     const row = logToRow(l)
     if (!kcalColumnRef.current) delete row.kcal
     if (!skippedColumnRef.current) delete row.skipped
     if (!feelColumnRef.current) delete row.feel
+    if (!movedColumnRef.current) delete row.moved_from
     return row
   }, [])
   // exercises.unilateral 칼럼이 아직 없으면(SQL 미실행) 그 값은 저장하지 않아서 운동 저장이 실패하지 않게 한다. 이때 표시는 유지되지 않는다.
@@ -343,6 +349,12 @@ export function WorkoutLogsProvider({ children }) {
         setFeelSupported(false)
         console.warn('workout_logs.feel 칼럼이 없어 체감 난이도를 저장하지 않습니다. supabase/log_feel.sql을 실행하세요.')
       }
+      // moved_from 칼럼 유무 확인(같은 방식)
+      if (lo.data.length && !('moved_from' in lo.data[0])) {
+        movedColumnRef.current = false
+        setMovedSupported(false)
+        console.warn('workout_logs.moved_from 칼럼이 없어 날짜 변경 표시를 저장하지 않습니다. supabase/log_moved.sql을 실행하세요.')
+      }
       replaceLogs(loadedLogs)
       const mergedBody = applyPending(loadedBodyRecords, pBo)
       replaceBodyRecords(loadedBodyRecords)
@@ -380,7 +392,7 @@ export function WorkoutLogsProvider({ children }) {
   }
 
   return (
-    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported, noteSupported, skippedSupported, feelSupported, bodySourceSupported }}>
+    <WorkoutLogsContext.Provider value={{ logs, setLogs, routines, setRoutines, exercises, setExercises, bodyRecords, setBodyRecords, profileWeightKg, unilateralSupported, noteSupported, skippedSupported, feelSupported, bodySourceSupported, movedSupported }}>
       {error && (
         <div className="fixed top-0 inset-x-0 z-[200] bg-red-500 text-white text-xs font-bold px-4 py-2 flex justify-between">
           <span>{error}</span>

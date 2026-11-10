@@ -3,7 +3,7 @@
 -- Supabase SQL Editor에 이 파일 내용을 통째로 붙여넣어 실행하세요.
 -- 새로 설치할 때도, 이미 쓰고 있는 DB를 최신으로 맞출 때도 이 파일 하나면 됩니다.
 -- 모든 문장이 여러 번 실행해도 안전하게 되어 있어서(없을 때만 만들고, 기존 데이터는 그대로 둡니다) 새 SQL이 추가될 때마다 다시 실행하면 됩니다.
--- 아래 파일들이 이 순서로 들어 있습니다: schema.sql → auth_profiles.sql → profile_fields.sql → body_records.sql → seed_exercises.sql → log_kcal.sql → ai_usage.sql → user_settings.sql → unilateral.sql → log_skipped.sql → log_feel.sql → exercise_note.sql → auth_rate_limit.sql → points.sql → body_source.sql
+-- 아래 파일들이 이 순서로 들어 있습니다: schema.sql → auth_profiles.sql → profile_fields.sql → body_records.sql → seed_exercises.sql → log_kcal.sql → ai_usage.sql → user_settings.sql → unilateral.sql → log_skipped.sql → log_feel.sql → exercise_note.sql → auth_rate_limit.sql → points.sql → body_source.sql → log_moved.sql
 --
 -- 앱을 배포하기 **전에** 실행하세요(새 칼럼이 없는 상태에서 새 앱이 저장하면 일부 기능이 실패하거나 값이 유지되지 않습니다).
 
@@ -1059,3 +1059,14 @@ alter table public.body_records
 alter table public.body_records drop constraint if exists body_records_source_check;
 alter table public.body_records
   add constraint body_records_source_check check (source in ('home', 'precise'));
+
+-- ======================================================================
+-- log_moved.sql
+-- ======================================================================
+
+-- 루틴 날짜 변경의 "원래 날짜" 표시: 세션을 다른 날짜로 옮기면 옮긴 기록에 비워진 날짜를 남겨서, 앱을 다시 열 때(자정이 지난 뒤 등) 그 날짜에 예정 기록이 다시 생기지 않게 한다.
+-- Supabase SQL Editor에서 실행한다 (schema.sql 실행 후). 여러 번 실행해도 안전하고 기존 기록은 빈 목록이 된다.
+-- 실행하지 않아도 앱은 동작한다 — 그때는 날짜를 바꿔도 앱을 다시 열면 원래 날짜에 같은 운동이 다시 생길 수 있고, 날짜 변경 창에 안내가 뜬다.
+
+alter table public.workout_logs
+  add column if not exists moved_from date[] not null default '{}';

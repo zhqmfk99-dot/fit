@@ -2,6 +2,7 @@
 // 미리 보여줘야 뭘 해야 할지 계획하고, 필요하면 날짜를 연기할 수 있다.
 // 이미 그 루틴에서 그 날짜치 기록이 있으면(완료·연기 포함) 중복 생성하지 않는다.
 import { targetRepsOf } from './progression.js'
+import { wasMovedAway } from './reschedule.js'
 
 const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 const SCHEDULE_AHEAD_DAYS = 14
@@ -19,6 +20,7 @@ export function generateScheduledLogs(routines, existingLogs) {
     routines.forEach(routine => {
       if (!routine.isActive || !routine.repeatDays?.includes(dowLabel)) return
       if (existingLogs.some(l => l.routineId === routine.id && l.date === dateStr)) return
+      if (wasMovedAway(existingLogs, routine.id, dateStr)) return // 다른 날짜로 옮긴 세션의 원래 날짜는 다시 채우지 않는다(lib/reschedule.js)
 
       routine.exercises.forEach(ex => {
         scheduled.push({

@@ -48,6 +48,7 @@ export default function MobileLog() {
     rescheduleTarget,
     setRescheduleTarget,
     handleRescheduleConfirm,
+    movedSupported,
     showModal,
     setShowModal,
     modalRow,
@@ -328,6 +329,7 @@ export default function MobileLog() {
           currentDate={rescheduleTarget.oldDate}
           onClose={() => setRescheduleTarget(null)}
           onConfirm={handleRescheduleConfirm}
+          movedSupported={movedSupported}
         />
       )}
     </div>

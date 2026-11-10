@@ -3,7 +3,7 @@ import DateInput from './DateInput.jsx'
 
 const ACCENT = 'bg-letusOrange'
 
-export default function RescheduleModal({ routineName, currentDate, onClose, onConfirm }) {
+export default function RescheduleModal({ routineName, currentDate, onClose, onConfirm, movedSupported = true }) {
   const [newDate, setNewDate] = useState(currentDate)
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -53,6 +53,9 @@ export default function RescheduleModal({ routineName, currentDate, onClose, onC
             </label>
             <DateInput value={newDate} onChange={setNewDate} fullWidth />
           </div>
+          {movedSupported === false && (
+            <div className="text-ui-caption text-orange-600 leading-relaxed">※ 이 데이터베이스에는 날짜 변경 표시 칼럼이 없어서, 앱을 다시 열면 원래 날짜에 같은 운동이 다시 생길 수 있어요. supabase/log_moved.sql 실행이 필요해요.</div>
+          )}
         </div>
 
         <div className="p-4 border-t border-gray-200 bg-white flex justify-end gap-2">

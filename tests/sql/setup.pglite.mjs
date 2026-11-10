@@ -27,7 +27,7 @@ const one = async (db, text, params) => Object.values((await q(db, text, params)
 const TABLES = ['exercises', 'routines', 'workout_logs', 'profiles', 'body_records', 'ai_usage', 'auth_lookup_attempts', 'point_events', 'pets']
 const COLUMNS = {
   exercises: ['movement_pattern', 'exercise_type', 'tags', 'unilateral', 'note'],
-  workout_logs: ['kcal', 'skipped', 'feel'],
+  workout_logs: ['kcal', 'skipped', 'feel', 'moved_from'],
   profiles: ['gender', 'age', 'height_cm', 'weight_kg', 'settings'],
   body_records: ['source'],
 }
