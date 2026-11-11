@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import DateInput from './DateInput.jsx'
 import { setCount, avgReps, avgWeight } from '../../lib/workoutMetrics.js'
+import { editedPerformedSets } from '../../lib/editedSets.js'
 import { useWorkoutLogs } from '../../context/WorkoutLogsContext.jsx'
 import { getKnownExerciseNames } from '../../lib/muscleMap.js'
 import { buildTagIndex, matchesQuery, aliasMatch } from '../../lib/exerciseSearch.js'
@@ -37,6 +38,7 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
     weight: row ? avgWeight(row) || '' : '',
     fatigue: row?.fatigue ?? '',
   })
+  const [initialForm] = useState(form) // 열 때의 입력값 — 세트 수·횟수·무게를 안 바꿨으면 기존 세트(시각 포함)를 그대로 둔다(lib/editedSets.js)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const [errorMsg, setErrorMsg] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
@@ -46,17 +48,13 @@ export default function WorkoutFormModal({ row, initialDate, onClose, onSave }) 
     if (!form.exercise.trim()) return setErrorMsg('운동명을 입력해 주세요.')
     setErrorMsg('')
 
-    const count = Math.max(1, Number(form.sets) || 1)
-    const reps = Number(form.reps) || 0
-    const weight = Number(form.weight) || 0
-
     onSave({
       id: row?.id ?? crypto.randomUUID(),
       date: form.date,
       exercise: form.exercise.trim(),
-      // 이 화면은 세트별 시간을 직접 입력받지 않으니, 입력한 값으로 세트를 균일하게 채운다
-      // (소요시간·휴식시간 기반 자동 계산은 운동 진행 화면에서만 가능)
-      performedSets: Array.from({ length: count }, () => ({ reps, weight, durationSeconds: null, restBeforeSeconds: null })),
+      // 이 화면은 세트별 시간을 직접 입력받지 않는다 — 세 칸을 안 바꿨으면 기존 세트 그대로, 바꿨으면 입력값으로 균일하게 채우되 같은 번째 세트의 시각·시간은 이어받는다
+      // (소요시간·휴식시간 기반 자동 계산은 운동 진행 화면에서만 가능, lib/editedSets.js)
+      performedSets: editedPerformedSets(row, form, initialForm),
       fatigue: Number(form.fatigue) || 0,
       // 완료 여부는 이 모달에서 건드리지 않는다 — 기존 값 유지, 신규 수동 등록은 완료로 시작
       isCompleted: row?.isCompleted ?? true,
