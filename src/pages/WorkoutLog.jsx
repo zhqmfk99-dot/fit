@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ChevronDown, CalendarClock, Play, Trash2 } from 'lucide-react'
+import { ChevronDown, CalendarClock, Play, Trash2, RotateCcw } from 'lucide-react'
+import { missingRoutineExercises } from '../lib/restoreMissing.js'
 import PageHeader from '../components/PageHeader.jsx'
 import WorkoutFormModal from '../components/web/WorkoutFormModal.jsx'
 import BodyRecordModal from '../components/BodyRecordModal.jsx'
@@ -46,6 +47,7 @@ export default function WorkoutLog() {
     deleteGroupPending,
     toggleComplete,
     restoreSkipped,
+    restoreMissing,
     handleModalSave,
   } = useWorkoutLog()
   const [showBodyModal, setShowBodyModal] = useState(false)
@@ -279,6 +281,8 @@ export default function WorkoutLog() {
                 const groupDate = group.logs[0]?.date
                 const hasPending = group.logs.some(isPending)
                 const skippedCount = group.logs.filter(isSkipped).length
+                // 루틴에는 있는데 이 날 묶음에서 지워진 운동(오늘 이후 날짜만 — 지난 날짜에 예정 기록을 만들지 않는다)
+                const missing = routine && groupDate >= getLocalDateString(new Date()) ? missingRoutineExercises(routine, group.logs) : []
 
                 return (
                   <div key={group.routineId} className="group/routine border border-gray-100 rounded-lg overflow-hidden">
@@ -304,6 +308,19 @@ export default function WorkoutLog() {
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             예정 기록 삭제
+                          </button>
+                        )}
+                        {missing.length > 0 && (
+                          <button
+                            onClick={e => {
+                              e.stopPropagation()
+                              restoreMissing(group.routineId, groupDate)
+                            }}
+                            className="flex items-center gap-1 text-ui-caption font-bold text-orange-600 hover:text-orange-700 px-1.5 py-1 rounded hover:bg-white transition-colors"
+                            title={`루틴에서 빠진 운동: ${missing.map(e => e.exercise).join(', ')}`}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            빠진 운동 {missing.length}개 채우기
                           </button>
                         )}
                         <button

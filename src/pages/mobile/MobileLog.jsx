@@ -12,6 +12,7 @@ import { setCount, avgReps, avgWeight } from '../../lib/workoutMetrics.js'
 import { isPending, isSkipped } from '../../lib/logStatus.js'
 import { buildDayDots } from '../../lib/dayDots.js'
 import { isPrecise } from '../../lib/bodySource.js'
+import { missingRoutineExercises } from '../../lib/restoreMissing.js'
 import { useWorkoutLog, getLocalDateString, fatigueDotColor, fatigueBadgeColor } from '../../hooks/useWorkoutLog.js'
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
@@ -59,6 +60,7 @@ export default function MobileLog() {
     deleteGroupPending,
     toggleComplete,
     restoreSkipped,
+    restoreMissing,
     handleModalSave,
   } = useWorkoutLog()
   const { bodyRecords } = useWorkoutLogs()
@@ -249,6 +251,8 @@ export default function MobileLog() {
             const groupDate = group.logs[0]?.date
             const hasPending = group.logs.some(isPending)
             const skippedCount = group.logs.filter(isSkipped).length
+            // 루틴에는 있는데 이 날 묶음에서 지워진 운동(오늘 이후 날짜만 — 지난 날짜에 예정 기록을 만들지 않는다)
+            const missing = routine && groupDate >= getLocalDateString(new Date()) ? missingRoutineExercises(routine, group.logs) : []
 
             return (
               <div key={group.routineId} className="border border-gray-100 rounded-lg overflow-hidden bg-white">
@@ -268,6 +272,12 @@ export default function MobileLog() {
                     <CalendarClock className="w-4 h-4" />
                     날짜 변경
                   </button>
+                  {missing.length > 0 && (
+                    <button onClick={() => restoreMissing(group.routineId, groupDate)} className="flex items-center gap-1 text-m-caption font-bold text-orange-600 px-3 py-2 rounded-lg bg-orange-50">
+                      <RotateCcw className="w-4 h-4" />
+                      빠진 운동 {missing.length}개 채우기
+                    </button>
+                  )}
                   {/* 이미 지운 루틴에서 남은 예정 기록은 묶음째 지울 수 있다(완료한 기록은 남는다) */}
                   {!routine && group.logs.some(l => !l.isCompleted) && (
                     <button

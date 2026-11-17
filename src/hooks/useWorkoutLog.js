@@ -4,6 +4,8 @@ import { useWorkoutLogs } from '../context/WorkoutLogsContext.jsx'
 import { getRecentMaxWeight, estimateExerciseFatigue } from '../lib/workoutMetrics.js'
 import { pendingInGroup, withoutPendingInGroup } from '../lib/routineCleanup.js'
 import { rescheduleGroup, withMovedMark } from '../lib/reschedule.js'
+import { missingRoutineExercises, restoreMissingLogs } from '../lib/restoreMissing.js'
+import { useSettings } from '../context/SettingsContext.jsx'
 
 export const getLocalDateString = d => {
   const pad = n => String(n).padStart(2, '0')
@@ -25,6 +27,7 @@ export function fatigueBadgeColor(level) {
 export function useWorkoutLog() {
   const navigate = useNavigate()
   const { logs, setLogs, routines, movedSupported } = useWorkoutLogs()
+  const { settings } = useSettings()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   const [listDate, setListDate] = useState(getLocalDateString(new Date()))
@@ -145,6 +148,16 @@ export function useWorkoutLog() {
       }),
     )
   }
+  // 루틴에는 있는데 그 날 묶음(같은 루틴·같은 날짜)에서 지워진 운동을 예정 기록으로 다시 채운다(lib/restoreMissing.js). 이미 한 기록은 그대로.
+  // 오늘 "오늘만 바꾸기"로 다른 운동으로 바꾼 운동도 원래 운동이 빠진 것으로 보이므로, 확인창에 운동 이름을 보여 준다.
+  const restoreMissing = (routineId, date) => {
+    const routine = routines.find(r => r.id === routineId)
+    const missing = missingRoutineExercises(routine, logs.filter(l => l.routineId === routineId && l.date === date))
+    if (!routine || !missing.length) return
+    const list = missing.map(e => `· ${e.exercise}`).join('\n')
+    if (!confirm(`루틴에서 빠진 운동 ${missing.length}개를 예정으로 다시 채울까요?\n${list}\n(오늘만 다른 운동으로 바꾼 운동도 여기에 나와요. 이미 한 기록은 그대로예요.)`)) return
+    setLogs(prev => restoreMissingLogs(prev, routines, routine, date, settings.defaultRestSeconds))
+  }
   // 건너뜀으로 표시된 운동을 다시 예정으로 되돌린다(기록 화면의 다시 하기)
   const restoreSkipped = id => setLogs(prev => prev.map(l => (l.id === id ? { ...l, skipped: false } : l)))
   const handleModalSave = saved => {
@@ -186,6 +199,7 @@ export function useWorkoutLog() {
     deleteGroupPending,
     toggleComplete,
     restoreSkipped,
+    restoreMissing,
     handleModalSave,
   }
 }
