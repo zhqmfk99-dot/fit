@@ -84,6 +84,7 @@ export const repsText = plan => String(targetRepsOf(plan))
 // 운동 종류별 증량 폭(kg). meta = 운동 리스트의 { equipment, movementPattern }
 export function weightIncrement(meta) {
   if (meta?.equipment === '덤벨') return 2
+  if (meta?.equipment === '불가리안백') return 1
   if (meta?.equipment === '바벨' && ['스쿼트', '힌지', '런지'].includes(meta?.movementPattern)) return 5
   return 2.5
 }
@@ -240,7 +241,10 @@ function evaluateCore({ log, plan, prevLogs = [], meta, skipRest = false }) {
     }
     const streak = missStreak(ww, prevLogs)
     if (!bodyweight && streak >= DELOAD_AFTER_MISSES) {
-      const lowered = Math.min(ww - 0.5, Math.round(ww * DELOAD_RATIO * 2) / 2)
+      // 불가리안백은 1kg 단위, 그 외는 0.5kg 단위로 맞춘다
+      const lowered = meta?.equipment === '불가리안백'
+        ? Math.min(ww - 1, Math.round(ww * DELOAD_RATIO))
+        : Math.min(ww - 0.5, Math.round(ww * DELOAD_RATIO * 2) / 2)
       return make('deload', `같은 무게에서 ${streak}번 연속 목표 ${target}회를 못 채웠어요. 무게를 낮춰 다시 쌓아요.`, { sets: plannedSets, reps: target, weight: Math.max(0, lowered) })
     }
     const warn = !bodyweight && streak === DELOAD_AFTER_MISSES - 1 ? ' 한 번 더 못 채우면 무게를 낮춰요.' : ''

@@ -21,6 +21,7 @@ export const SETUP_ORDER = [
   'points.sql',
   'body_source.sql',
   'log_moved.sql',
+  'bulgarian_bag_weight.sql',
 ]
 
 // 한 번에 실행하는 파일에 넣지 않는 파일과 이유

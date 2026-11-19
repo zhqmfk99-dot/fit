@@ -18,6 +18,20 @@ assert.equal(ev(base(good, { feel: 'ok' })).verdict, 'weight-up')
 // feel이 null이어도 같다
 assert.equal(ev(base(good, { feel: null })).verdict, 'weight-up')
 
+// 불가리안백: 증량 폭 1kg, 연속 미달 감량도 1kg 단위(정수)
+{
+  const bag = { equipment: '불가리안백', movementPattern: '기타' }
+  const r = evaluateSession({ log: base([set(8, 12), set(8, 12), set(8, 12)], { targetWeight: 12 }), plan: null, prevLogs: [], meta: bag })
+  assert.equal(r.verdict, 'weight-up')
+  assert.equal(r.next.weight, 13)
+  const miss = [set(8, 25), set(8, 25), set(6, 25)]
+  const prev = [1, 2].map(i => ({ performedSets: [set(8, 25), set(8, 25), set(6, 25)], targetReps: 8, date: `2026-01-0${i}` }))
+  const d = evaluateSession({ log: base(miss, { targetWeight: 25 }), plan: null, prevLogs: prev, meta: bag })
+  assert.equal(d.verdict, 'deload')
+  assert.equal(d.next.weight, 23) // 25 * 0.9 = 22.5 → 23, 바벨이면 22.5
+  assert.ok(Number.isInteger(d.next.weight))
+}
+
 // hard: 목표를 다 채우고 품질이 좋아도 유지, 무게 그대로
 {
   const r = ev(base(good, { feel: 'hard' }))
