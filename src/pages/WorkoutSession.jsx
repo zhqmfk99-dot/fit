@@ -1036,6 +1036,11 @@ export default function WorkoutSession() {
                   세트 추가
                 </button>
               )}
+              {/* 아래쪽 "이 운동 건너뛰기" 링크는 화면 맨 아래라 노트북 화면에서는 스크롤해야 보여서, 눈에 잘 띄는 위쪽 칩에도 둔다(웹앱 전용) */}
+              <button type="button" onClick={skipExercise} className="inline-flex items-center gap-1 px-3 min-h-[32px] rounded-full bg-gray-100 text-gray-600 text-ui-caption font-bold hover:bg-gray-200 active:bg-gray-200">
+                <SkipForward className="w-3.5 h-3.5" />
+                이 운동 건너뛰기
+              </button>
             </div>
           )}
           {doneSets.length === 0 && reviewIdx === null && renderNote(currentLog)}
